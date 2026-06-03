@@ -1,0 +1,1833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>End Bubble</title>
+    <link href="https://fonts.googleapis.com/css2?family=Syncopate:wght@400;700&display=swap" rel="stylesheet">
+        <style>
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html, body {
+            width: 100%; height: 100%;
+            overflow: hidden;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            background: #0a0908;
+            font-family: 'Syncopate', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0; padding: 0;
+        }
+
+        #game-container {
+            position: relative;
+            width: min(100%, 380px);
+            height: min(100vh, 680px);
+            overflow: hidden;
+            background: #0a0908;
+        }
+
+        #main-canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+            cursor: pointer;
+        }
+
+        /* Grain overlay */
+        #grain {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 30;
+            pointer-events: none;
+            opacity: 0.045;
+        }
+
+        /* Volume mute toggle — bottom right */
+        #vol-btn {
+            position: absolute;
+            bottom: max(22px, env(safe-area-inset-bottom));
+            right: 22px;
+            z-index: 40;
+            width: 36px; height: 36px;
+            background: rgba(0,0,0,0.38);
+            border: 1px solid rgba(255,255,255,0.10);
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: border-color 0.2s;
+            padding: 0;
+            isolation: isolate;
+            backdrop-filter: none; -webkit-backdrop-filter: none;
+        }
+        #vol-btn:hover { border-color: rgba(255,255,255,0.22); }
+        #vol-btn svg { width: 16px; height: 16px; }
+
+        /* Exit button — bottom left */
+        #exit-btn {
+            position: absolute;
+            bottom: max(22px, env(safe-area-inset-bottom));
+            left: 22px;
+            z-index: 10;
+            display: none;
+            background: rgba(0,0,0,0.40);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: rgba(210,190,165,0.65);
+            font-family: 'Syncopate', sans-serif;
+            font-size: 0.68rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+            isolation: isolate;
+        }
+        #exit-btn:hover { color: rgba(220,200,175,0.9); border-color: rgba(255,255,255,0.25); }
+
+        /* Start screen */
+        #start-screen {
+            position: absolute;
+            inset: 0;
+            z-index: 20;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            background: rgba(14,12,10,0.52);
+            padding: 0 24px;
+            text-align: center;
+        }
+
+        .start-title {
+            font-size: clamp(1.6rem, 10vw, 2.8rem);
+            font-weight: 700;
+            font-style: normal;
+            color: rgba(235,218,195,0.98);
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            margin-bottom: 14px;
+            text-shadow: 0 0 30px rgba(0,0,0,0.9), 0 2px 8px rgba(0,0,0,1);
+        }
+
+        .start-sub {
+            font-size: clamp(0.55rem, 2.8vw, 0.80rem);
+            font-weight: 400;
+            color: rgba(210,190,162,0.80);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 60px;
+            text-shadow: 0 1px 10px rgba(0,0,0,1);
+            max-width: 88vw;
+        }
+
+        .start-prompt {
+            font-family: 'Syncopate', sans-serif;
+            font-size: clamp(0.65rem, 3.2vw, 0.85rem);
+            font-weight: 700;
+            color: hsl(72, 100%, 62%);
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            animation: breathe 3.5s ease-in-out infinite;
+            text-shadow: 0 0 12px hsl(72,100%,50%), 0 0 28px hsl(72,100%,40%), 0 1px 8px rgba(0,0,0,1);
+        }
+
+        @keyframes breathe {
+            0%, 100% { opacity: 0.32; }
+            50% { opacity: 0.72; }
+        }
+
+        /* End screen */
+        #end-screen {
+            position: absolute;
+            inset: 0;
+            z-index: 20;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 1.6s ease;
+            cursor: pointer;
+            background: rgba(14,12,10,0.52);
+        }
+        #end-screen.show { display: flex; }
+        #end-screen.fade { opacity: 1; }
+
+        #end-screen {
+            position: absolute;
+            inset: 0;
+            z-index: 20;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 1.6s ease;
+            cursor: pointer;
+            background: rgba(14,12,10,0.52);
+            padding: 0 24px;
+            text-align: center;
+        }
+        #end-screen.show { display: flex; }
+        #end-screen.fade { opacity: 1; }
+
+        .end-popped {
+            font-size: clamp(0.6rem, 3vw, 1.0rem);
+            font-weight: 400;
+            color: rgba(205,185,158,0.85);
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            margin-bottom: 14px;
+            text-shadow: 0 1px 10px rgba(0,0,0,1);
+        }
+
+        .end-number {
+            font-size: clamp(4rem, 18vw, 7rem);
+            font-weight: 700;
+            color: rgba(235,215,185,0.98);
+            line-height: 1;
+            letter-spacing: 2px;
+            margin-bottom: 12px;
+            text-shadow: 0 0 40px rgba(0,0,0,0.9), 0 2px 8px rgba(0,0,0,1);
+        }
+
+        .end-best-line {
+            font-size: clamp(0.55rem, 2.8vw, 0.90rem);
+            font-weight: 400;
+            color: rgba(195,175,148,0.72);
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            margin-bottom: 60px;
+            text-shadow: 0 1px 8px rgba(0,0,0,1);
+        }
+
+        .end-again {
+            font-family: 'Syncopate', sans-serif;
+            font-size: clamp(0.65rem, 3.2vw, 0.85rem);
+            font-weight: 700;
+            color: hsl(72, 100%, 62%);
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            animation: breathe 3.5s ease-in-out infinite;
+            text-shadow: 0 0 12px hsl(72,100%,50%), 0 0 28px hsl(72,100%,40%), 0 1px 8px rgba(0,0,0,1);
+        }
+    </style>
+</head>
+<body>
+<div id="game-container">
+    <canvas id="main-canvas"></canvas>
+
+    <!-- SVG grain texture -->
+    <svg id="grain" xmlns="http://www.w3.org/2000/svg" style="opacity:0.055">
+        <filter id="fn"><feTurbulence type="fractalNoise" baseFrequency="0.7" numOctaves="4" stitchTiles="stitch"/>
+        <feColorMatrix type="saturate" values="0"/></filter>
+        <rect width="100%" height="100%" filter="url(#fn)"/>
+    </svg>
+
+    <!-- Exit button (during play) -->
+    <button id="exit-btn">Exit</button>
+
+    <!-- Mute toggle — always visible -->
+    <button id="vol-btn" aria-label="Mute">
+        <svg id="vol-icon" viewBox="0 0 24 24" fill="none" stroke="rgba(210,190,165,0.70)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+            <path id="vol-waves" d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14"/>
+        </svg>
+    </button>
+
+    <!-- Start -->
+    <div id="start-screen">
+        <div class="start-title">End Bubble</div>
+        <div class="start-sub">find the one that ends it all</div>
+        <div class="start-prompt">touch to begin</div>
+    </div>
+
+    <!-- End -->
+    <div id="end-screen">
+        <div class="end-popped">bubbles perished</div>
+        <div class="end-number" id="end-num">0</div>
+        <div class="end-best-line" id="end-best">best — 0</div>
+        <div class="end-again">play again</div>
+    </div>
+</div>
+
+<script>
+'use strict';
+
+/* ================================================
+   PALETTE
+================================================ */
+const C = {
+    accent:     '#c07828',
+    accentDim:  '#6e4010',
+    silDark:    '#0e0d0c',
+    silMid:     '#181614',
+    ground:     '#111010',
+    bubTint:    [200, 185, 168],
+};
+
+/* ================================================
+   SCENES — pre-baked once per game, stable each frame
+================================================ */
+let sceneBitmap = null;
+let menuBitmap  = null;
+
+function bakeScene(W, H) {
+    // Demo: locked to one scene — full scene variety in the Android app
+    const s = { fn: sceneForest, vents: [0.15, 0.50, 0.82] };
+    const off = document.createElement('canvas');
+    off.width = W; off.height = H;
+    s.fn(off.getContext('2d'), W, H);
+    sceneBitmap = off;
+    Vents.setPositions(s.vents);
+}
+
+function bakeMenuScene(W, H) {
+    const off = document.createElement('canvas');
+    off.width = W; off.height = H;
+    sceneRuins(off.getContext('2d'), W, H);
+    menuBitmap = off;
+}
+
+/* ── RUINS — always the menu scene ─────────── */
+function sceneRuins(ctx, W, H) {
+    const sk = ctx.createLinearGradient(0,0,0,H);
+    sk.addColorStop(0,'#2e2a24'); sk.addColorStop(0.55,'#3d382e'); sk.addColorStop(1,'#2a2520');
+    ctx.fillStyle=sk; ctx.fillRect(0,0,W,H);
+    _mountains(ctx,W,H,[[0,.60],[.10,.46],[.22,.54],[.36,.40],[.50,.52],[.63,.38],[.76,.50],[.88,.44],[1,.58]],'#35302a');
+    _mountains(ctx,W,H,[[0,.72],[.15,.62],[.30,.67],[.46,.60],[.62,.66],[.77,.60],[.92,.65],[1,.70]],'#28231e');
+    ctx.fillStyle=C.ground; ctx.fillRect(0,H*.80,W,H*.20);
+    _arch(ctx, W*.22, W*.56, H*.80, H*.40, 18);
+    ctx.fillStyle=C.silDark;
+    ctx.fillRect(W*.02, H*.52, 22, H*.28);
+    ctx.fillRect(W*.02-5, H*.50, 32, 8);
+    ctx.fillRect(W*.02+2, H*.46, 14, 8);
+    const cX=W*.76, cH=H*.30;
+    ctx.fillRect(cX-9, H*.80-cH, 18, cH);
+    ctx.fillRect(cX-14, H*.80-cH, 28, 8);
+    [[W*.60,6],[W*.66,5],[W*.72,7],[W*.80,4],[W*.84,5],[W*.10,5],[W*.16,4]].forEach(([rx,rh])=>ctx.fillRect(rx, H*.80-rh, 12, rh));
+    _bareTree(ctx, W*.10, H*.80, H*.34, 4, 4);
+    _bareTree(ctx, W*.88, H*.80, H*.28, 3, 3);
+    _bareTree(ctx, W*.04, H*.82, H*.18, 2, 3);
+    _groundShadows(ctx, W, H);
+}
+
+/* ── SCENE 1 — DESOLATE PIPES ───────────────── */
+function sceneForest(ctx, W, H) {
+    const sk=ctx.createLinearGradient(0,0,0,H);
+    sk.addColorStop(0,'#2c2824'); sk.addColorStop(0.5,'#3a3530'); sk.addColorStop(1,'#2a2620');
+    ctx.fillStyle=sk; ctx.fillRect(0,0,W,H);
+    _ruinSkyline(ctx,W,H,'#2e2a22',0.36,0.62);
+    _mountains(ctx,W,H,[[0,.78],[.14,.66],[.28,.71],[.43,.63],[.58,.69],[.73,.62],[.88,.67],[1,.74]],'#252220');
+    ctx.fillStyle=C.ground; ctx.fillRect(0,H*.82,W,H*.18);
+    _pipes(ctx, W, H, H*.82, Math.floor(Math.random()*99999));
+    _groundShadows(ctx, W, H);
+}
+
+/* ── SCENE 2 — MISTY PIPES ──────────────────── */
+function sceneValley(ctx, W, H) {
+    const sk=ctx.createLinearGradient(0,0,0,H);
+    sk.addColorStop(0,'#2a2822'); sk.addColorStop(0.5,'#38342e'); sk.addColorStop(1,'#2a2720');
+    ctx.fillStyle=sk; ctx.fillRect(0,0,W,H);
+    const mist=ctx.createLinearGradient(0,H*.50,0,H*.72);
+    mist.addColorStop(0,'rgba(70,64,55,0)'); mist.addColorStop(0.5,'rgba(70,64,55,0.25)'); mist.addColorStop(1,'rgba(70,64,55,0)');
+    ctx.fillStyle=mist; ctx.fillRect(0,H*.50,W,H*.22);
+    _ruinSkyline(ctx,W,H,'#2e2a22',0.32,0.58);
+    _mountains(ctx,W,H,[[0,.72],[.14,.62],[.30,.66],[.46,.59],[.62,.65],[.76,.59],[.90,.65],[1,.71]],'#262320');
+    ctx.fillStyle=C.ground; ctx.fillRect(0,H*.82,W,H*.18);
+    _pipes(ctx, W, H, H*.82, Math.floor(Math.random()*99999));
+    _groundShadows(ctx, W, H);
+}
+
+/* ── SCENE 3 — TOWER + PIPES ────────────────── */
+function sceneTower(ctx, W, H) {
+    const sk=ctx.createLinearGradient(0,0,0,H);
+    sk.addColorStop(0,'#2b2822'); sk.addColorStop(0.6,'#38332b'); sk.addColorStop(1,'#2a2620');
+    ctx.fillStyle=sk; ctx.fillRect(0,0,W,H);
+    _ruinSkyline(ctx,W,H,'#2e2a22',0.34,0.62);
+    ctx.fillStyle=C.ground; ctx.fillRect(0,H*.80,W,H*.20);
+    const tX=W*.65, tW=W*.15, tH=H*.54;
+    ctx.fillStyle=C.silDark;
+    ctx.fillRect(tX-tW/2, H*.80-tH, tW, tH);
+    const mW=tW/5;
+    for(let i=0;i<5;i++){
+        if(i===2) continue;
+        const mh=i===1?tH*.05:tH*.09;
+        ctx.fillRect(tX-tW/2+i*mW, H*.80-tH-mh, mW*.72, mh);
+    }
+    ctx.fillStyle='#0b0a09'; ctx.fillRect(tX-4, H*.80-tH*.64, 8, 18);
+    ctx.strokeStyle='#0f0e0c'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(tX+tW*.2,H*.80-tH*.85); ctx.lineTo(tX+tW*.28,H*.80-tH*.62); ctx.lineTo(tX+tW*.22,H*.80-tH*.42); ctx.stroke();
+    [[tX+tW*.5+4,H*.80,13,6],[tX+tW*.5+18,H*.80,9,5],[tX-tW*.5-10,H*.80,11,5]].forEach(([rx,ry,rw,rh])=>ctx.fillRect(rx,ry-rh,rw,rh));
+    ctx.fillStyle=C.silDark;
+    ctx.fillRect(W*.04, H*.57, 16, H*.23);
+    ctx.fillRect(W*.04-4, H*.55, 24, 7);
+    _pipes(ctx, W, H, H*.80, Math.floor(Math.random()*99999));
+    _groundShadows(ctx, W, H);
+}
+
+/* ── SCENE 4 — DENSE PIPE FIELD ─────────────── */
+function sceneMoor(ctx, W, H) {
+    const sk=ctx.createLinearGradient(0,0,0,H);
+    sk.addColorStop(0,'#252220'); sk.addColorStop(0.5,'#322e28'); sk.addColorStop(1,'#282420');
+    ctx.fillStyle=sk; ctx.fillRect(0,0,W,H);
+    _ruinSkyline(ctx,W,H,'#2a2620',0.36,0.60);
+    _mountains(ctx,W,H,[[0,.72],[.14,.64],[.28,.70],[.44,.63],[.60,.69],[.76,.63],[.90,.68],[1,.73]],'#222018');
+    ctx.fillStyle=C.ground; ctx.fillRect(0,H*.82,W,H*.18);
+    _pipes(ctx, W, H, H*.82, Math.floor(Math.random()*99999));
+    _groundShadows(ctx, W, H);
+}
+
+/* ── WIND FARM — broken frozen turbines ─────── */
+function sceneWindFarm(ctx, W, H) {
+    const sk=ctx.createLinearGradient(0,0,0,H);
+    sk.addColorStop(0,'#222026'); sk.addColorStop(0.5,'#2e2c34'); sk.addColorStop(1,'#201e26');
+    ctx.fillStyle=sk; ctx.fillRect(0,0,W,H);
+    _ruinSkyline(ctx,W,H,'#262430',0.38,0.64);
+    _mountains(ctx,W,H,[[0,.70],[.12,.58],[.26,.64],[.40,.56],[.55,.62],[.70,.55],[.84,.61],[1,.68]],'#1e1c24');
+    ctx.fillStyle=C.ground; ctx.fillRect(0,H*.82,W,H*.18);
+
+    // Draw a broken wind turbine: tower + nacelle + 3 blades at broken angles
+    function _turbine(tx, towerH, tilt, bladeAngles, brokenBlade) {
+        ctx.save(); ctx.translate(tx, H*.82); ctx.rotate(tilt);
+        ctx.fillStyle=C.silDark;
+        // Tower — tapers slightly
+        ctx.beginPath();
+        ctx.moveTo(-5, 0); ctx.lineTo(-3, -towerH); ctx.lineTo(3, -towerH); ctx.lineTo(5, 0);
+        ctx.closePath(); ctx.fill();
+        // Nacelle box at top
+        ctx.fillRect(-10, -towerH-8, 20, 9);
+        // Blades
+        bladeAngles.forEach((angle, i) => {
+            ctx.save(); ctx.translate(0, -towerH-4);
+            ctx.rotate(angle);
+            const bLen = towerH * 0.48;
+            // Broken blade shorter
+            const len = (i === brokenBlade) ? bLen * 0.55 : bLen;
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.bezierCurveTo(4, -len*0.3, 7, -len*0.7, 5, -len);
+            ctx.bezierCurveTo(2, -len, -2, -len*0.7, -1, -len*0.3);
+            ctx.closePath(); ctx.fill();
+            // Broken tip
+            if (i===brokenBlade) {
+                ctx.save(); ctx.translate(5,-len);
+                ctx.rotate(0.4);
+                ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(4,-bLen*0.3); ctx.lineTo(-3,-bLen*0.25); ctx.closePath(); ctx.fill();
+                ctx.restore();
+            }
+            ctx.restore();
+        });
+        // Hub circle
+        ctx.beginPath(); ctx.arc(0,-towerH-4,5,0,Math.PI*2); ctx.fill();
+        ctx.restore();
+    }
+
+    // Fallen turbine on the ground
+    function _fallenTurbine(tx) {
+        ctx.save(); ctx.translate(tx, H*.82); ctx.fillStyle=C.silDark;
+        const towerLen=H*.22;
+        // Horizontal tower
+        ctx.beginPath(); ctx.moveTo(-5,-4); ctx.lineTo(-towerLen,-2); ctx.lineTo(-towerLen,2); ctx.lineTo(-5,4); ctx.closePath(); ctx.fill();
+        ctx.fillRect(-H*.22-12,-5,14,10);
+        // Blades splayed on ground
+        ctx.save(); ctx.translate(-H*.22,0);
+        [[0.2,H*.10],[1.1,H*.09],[-0.5,H*.08]].forEach(([a,l])=>{
+            ctx.save(); ctx.rotate(a);
+            ctx.beginPath(); ctx.moveTo(0,0); ctx.bezierCurveTo(4,-l*0.3,7,-l*0.7,5,-l);
+            ctx.bezierCurveTo(2,-l,-2,-l*0.7,-1,-l*0.3); ctx.closePath(); ctx.fill();
+            ctx.restore();
+        });
+        ctx.restore(); ctx.restore();
+    }
+
+    _turbine(W*.15, H*.52, -0.06, [0, 2.1, 4.2], 1);
+    _turbine(W*.38, H*.60, 0.03,  [0.5, 2.6, 4.7], null);
+    _turbine(W*.62, H*.48, 0.08,  [0.8, 2.9, 5.0], 2);
+    _turbine(W*.85, H*.55, -0.04, [1.1, 3.2, 5.3], 0);
+    _fallenTurbine(W*.50);
+
+    // Fence posts along ground
+    ctx.fillStyle=C.silDark;
+    for(let i=0;i<12;i++){
+        const fx=W*(0.04+i*0.085);
+        ctx.fillRect(fx-1.5, H*.82-H*.04, 3, H*.04);
+        if(i<11) ctx.fillRect(fx, H*.82-H*.03, W*0.085, 1.5);
+    }
+    _groundShadows(ctx,W,H);
+}
+
+/* ── CRASHED SPACE / MARS ────────────────────── */
+function sceneSpaceCrash(ctx, W, H) {
+    // Reddish-dark sky — Mars palette
+    const sk=ctx.createLinearGradient(0,0,0,H);
+    sk.addColorStop(0,'#1e1614'); sk.addColorStop(0.5,'#2c1e1a'); sk.addColorStop(1,'#201612');
+    ctx.fillStyle=sk; ctx.fillRect(0,0,W,H);
+    // Two small Martian moons — crescent
+    _moon(ctx, W*.78, H*.10, W*.05, 'rgba(200,160,140,0.28)');  // rusty moon
+    _moon(ctx, W*.18, H*.16, W*.028, 'rgba(185,145,125,0.20)');  // second small moon
+    // Distant low mesa silhouettes
+    _mountains(ctx,W,H,[[0,.72],[.10,.64],[.22,.68],[.36,.62],[.52,.66],[.66,.60],[.80,.65],[1,.70]],'#251a16');
+    _mountains(ctx,W,H,[[0,.80],[.15,.74],[.30,.77],[.50,.73],[.70,.76],[.88,.74],[1,.78]],'#1c1410');
+    ctx.fillStyle='#181008'; ctx.fillRect(0,H*.82,W,H*.18);
+
+    ctx.fillStyle=C.silDark;
+
+    // Large crashed satellite dish — face down, cracked
+    const dX=W*.38, dY=H*.82;
+    // Dish body — ellipse face-down
+    ctx.beginPath(); ctx.ellipse(dX, dY-8, W*.22, H*.09, -0.15, 0, Math.PI*2); ctx.fill();
+    // Inner dish hollow
+    ctx.fillStyle='#0c0a08';
+    ctx.beginPath(); ctx.ellipse(dX-4, dY-10, W*.17, H*.065, -0.15, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle=C.silDark;
+    // Dish mount arm sticking up at angle
+    ctx.save(); ctx.translate(dX+W*.10, dY-12); ctx.rotate(-0.6);
+    ctx.fillRect(-4, -H*.18, 8, H*.18);
+    // Broken joint at top
+    ctx.save(); ctx.translate(0,-H*.18); ctx.rotate(0.8);
+    ctx.fillRect(-3,0,6,H*.07); ctx.restore();
+    ctx.restore();
+    // Crack lines on dish
+    ctx.strokeStyle='rgba(8,6,4,0.9)'; ctx.lineWidth=1.5; ctx.lineCap='round';
+    [[dX-W*.08,dY-14,dX-W*.04,dY-4],[dX+W*.04,dY-18,dX+W*.10,dY-8],[dX-W*.12,dY-6,dX-W*.06,dY-2]].forEach(([x1,y1,x2,y2])=>{
+        ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+    });
+
+    // Broken solar panel array — left side
+    ctx.fillStyle=C.silDark;
+    const panX=W*.72, panY=H*.70;
+    // Main arm
+    ctx.fillRect(panX-6, panY, 12, H*.12);
+    // Panel rows — some snapped off
+    [[-1,0,1],[-1,0.25,0.6],[-1,0.5,1],[1,0,1],[1,0.25,0.8]].forEach(([dir,frac,scale])=>{
+        const py2=panY+H*.12*frac;
+        ctx.fillRect(panX+dir*(W*.18*scale)-4, py2-4, W*.18*scale, 8);
+        // Grid lines on panels
+        ctx.strokeStyle='rgba(8,6,4,0.7)'; ctx.lineWidth=1;
+        for(let g=1;g<4;g++){
+            ctx.beginPath();
+            ctx.moveTo(panX+dir*(W*.18*scale*g/4)-4, py2-4);
+            ctx.lineTo(panX+dir*(W*.18*scale*g/4)-4, py2+4);
+            ctx.stroke();
+        }
+        ctx.fillStyle=C.silDark;
+    });
+
+    // Comms tower — bent, listing left
+    ctx.save(); ctx.translate(W*.88, H*.82); ctx.rotate(-0.12);
+    ctx.fillRect(-4,-H*.40,8,H*.40);
+    // Cross struts
+    [[H*.10],[H*.22],[H*.34]].forEach(([h])=>{
+        ctx.fillRect(-12,-h,24,4);
+    });
+    // Dish on top — snapped
+    ctx.save(); ctx.translate(0,-H*.40); ctx.rotate(0.5);
+    ctx.beginPath(); ctx.ellipse(0,0,W*.06,H*.04,-0.3,0,Math.PI); ctx.fill();
+    ctx.restore(); ctx.restore();
+
+    // Scattered debris on ground
+    [[W*.08,H*.82,20,7,0.15],[W*.18,H*.82,14,5,-0.2],[W*.55,H*.82,18,6,0.1],[W*.65,H*.82,10,4,-0.1],[W*.82,H*.82,16,5,0.2]].forEach(([rx,ry,rw,rh,rot])=>{
+        ctx.save(); ctx.translate(rx,ry); ctx.rotate(rot);
+        ctx.fillRect(-rw/2,-rh,rw,rh); ctx.restore();
+    });
+
+    // Dust/impact craters on ground
+    ctx.strokeStyle='rgba(0,0,0,0.50)'; ctx.lineWidth=2;
+    [[W*.25,H*.84,18],[W*.55,H*.85,12],[W*.70,H*.84,8]].forEach(([cx,cy,r])=>{
+        ctx.beginPath(); ctx.arc(cx,cy,r,Math.PI,Math.PI*2); ctx.stroke();
+    });
+
+    _groundShadows(ctx,W,H);
+}
+
+/* ── SPACE 2 — DEAD MOON / GREY ICY WRECKAGE ── */
+function sceneSpaceMoon(ctx, W, H) {
+    // Cold grey-blue — dead moon surface
+    const sk=ctx.createLinearGradient(0,0,0,H);
+    sk.addColorStop(0,'#0e1018'); sk.addColorStop(0.5,'#161a22'); sk.addColorStop(1,'#111418');
+    ctx.fillStyle=sk; ctx.fillRect(0,0,W,H);
+    // Large full Earth/planet in sky
+    _moon(ctx, W*.72, H*.15, W*.12, 'rgba(210,210,220,0.28)');  // cool grey-white
+    // Distant crater rim ridgeline
+    _mountains(ctx,W,H,[[0,.68],[.08,.60],[.18,.64],[.30,.58],[.44,.62],[.56,.56],[.68,.61],[.82,.57],[.92,.62],[1,.66]],'#191d26');
+    _mountains(ctx,W,H,[[0,.78],[.12,.72],[.26,.75],[.42,.70],[.58,.74],[.74,.70],[.88,.73],[1,.76]],'#13161e');
+    ctx.fillStyle='#0e1016'; ctx.fillRect(0,H*.82,W,H*.18);
+
+    ctx.fillStyle=C.silDark;
+
+    // Crashed lander — three legs splayed, body tilted
+    const lX=W*.30, lY=H*.82;
+    ctx.save(); ctx.translate(lX, lY); ctx.rotate(0.18);
+    // Body hexagon
+    ctx.beginPath();
+    for(let i=0;i<6;i++){
+        const a=i/6*Math.PI*2, r=W*.07;
+        i===0?ctx.moveTo(Math.cos(a)*r,Math.sin(a)*r-H*.08):ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r-H*.08);
+    }
+    ctx.closePath(); ctx.fill();
+    // Engine nozzle underneath
+    ctx.beginPath(); ctx.ellipse(0,-H*.04,W*.04,H*.025,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#0a0c10';
+    ctx.beginPath(); ctx.ellipse(0,-H*.04,W*.025,H*.015,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle=C.silDark;
+    // Three legs — one broken
+    [[-0.9,0.5],[0,1.1],[0.8,0.4]].forEach(([angle,len],i)=>{
+        ctx.save(); ctx.rotate(angle);
+        ctx.fillRect(-3,0,6,H*.14*len);
+        // Foot pad
+        if(i!==1) ctx.fillRect(-10,H*.14*len-4,20,5);
+        // Broken leg — snapped mid
+        if(i===1){ ctx.save(); ctx.translate(0,H*.08); ctx.rotate(0.6); ctx.fillRect(-3,0,5,H*.06); ctx.restore(); }
+        ctx.restore();
+    });
+    ctx.restore();
+
+    // Frozen cryo tanks — cylindrical shapes on their sides
+    [[W*.62,H*.76,W*.14,H*.05,0.08],[W*.68,H*.80,W*.10,H*.035,-0.05],[W*.58,H*.79,W*.08,H*.03,0.12]].forEach(([cx,cy,rw,rh,rot])=>{
+        ctx.save(); ctx.translate(cx,cy); ctx.rotate(rot);
+        ctx.beginPath(); ctx.ellipse(0,0,rw/2,rh/2,0,0,Math.PI*2); ctx.fill();
+        // End caps
+        ctx.beginPath(); ctx.ellipse(-rw/2,0,rh*0.6,rh/2,0,0,Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(rw/2,0,rh*0.6,rh/2,0,0,Math.PI*2); ctx.fill();
+        ctx.restore();
+    });
+
+    // Broken antenna mast — thin, leaning
+    ctx.save(); ctx.translate(W*.80,H*.82); ctx.rotate(-0.22);
+    ctx.fillRect(-2,-H*.38,4,H*.38);
+    // Crossbars
+    [H*.12,H*.24,H*.34].forEach(h=>ctx.fillRect(-14,-h,28,3));
+    // Dish on top snapped off — lying at an angle
+    ctx.save(); ctx.translate(0,-H*.38); ctx.rotate(1.2);
+    ctx.beginPath(); ctx.ellipse(0,0,W*.05,H*.03,0,0,Math.PI*2); ctx.fill();
+    ctx.restore(); ctx.restore();
+
+    // Scattered hull plating — irregular polygon shapes
+    ctx.fillStyle=C.silDark;
+    [[W*.05,H*.82],[W*.12,H*.81],[W*.48,H*.82],[W*.52,H*.81],[W*.86,H*.82]].forEach(([px,py])=>{
+        const s=8+Math.random()*14;
+        ctx.save(); ctx.translate(px,py); ctx.rotate(Math.random()*0.4-0.2);
+        ctx.beginPath(); ctx.moveTo(-s,0); ctx.lineTo(-s*0.3,-s*0.8); ctx.lineTo(s*0.5,-s*0.6);
+        ctx.lineTo(s,0); ctx.closePath(); ctx.fill(); ctx.restore();
+    });
+
+    // Craters — simple arc shadows
+    ctx.strokeStyle='rgba(0,0,0,0.60)'; ctx.lineWidth=2.5;
+    [[W*.20,H*.85,22],[W*.44,H*.84,14],[W*.70,H*.85,18],[W*.88,H*.84,10]].forEach(([cx,cy,r])=>{
+        ctx.beginPath(); ctx.arc(cx,cy,r,Math.PI*1.1,Math.PI*1.9); ctx.stroke();
+    });
+
+    _groundShadows(ctx,W,H);
+}
+
+/* ── SPACE 3 — TOXIC PLANET / YELLOW-GREEN HAZE ─ */
+function sceneSpaceToxic(ctx, W, H) {
+    // Sickly yellow-green atmosphere
+    const sk=ctx.createLinearGradient(0,0,0,H);
+    sk.addColorStop(0,'#141a0e'); sk.addColorStop(0.4,'#1c2410'); sk.addColorStop(1,'#161c0c');
+    ctx.fillStyle=sk; ctx.fillRect(0,0,W,H);
+    // Half moon barely visible through haze
+    _moon(ctx, W*.82, H*.08, W*.055, 'rgba(180,200,150,0.22)');  // toxic pale green
+    // Haze layer mid-sky
+    const haze=ctx.createLinearGradient(0,H*.35,0,H*.60);
+    haze.addColorStop(0,'rgba(40,55,10,0)'); haze.addColorStop(0.5,'rgba(40,55,10,0.20)'); haze.addColorStop(1,'rgba(40,55,10,0)');
+    ctx.fillStyle=haze; ctx.fillRect(0,H*.35,W,H*.25);
+    // Jagged horizon
+    _mountains(ctx,W,H,[[0,.65],[.07,.57],[.16,.61],[.28,.54],[.40,.59],[.53,.52],[.64,.57],[.76,.51],[.88,.56],[1,.62]],'#1a2212');
+    _mountains(ctx,W,H,[[0,.76],[.14,.68],[.28,.73],[.44,.66],[.60,.71],[.76,.66],[.90,.70],[1,.74]],'#141a0c');
+    ctx.fillStyle='#101408'; ctx.fillRect(0,H*.82,W,H*.18);
+
+    ctx.fillStyle=C.silDark;
+
+    // Crashed probe — boxy body, wheels exposed, rolled over
+    const pX=W*.25, pY=H*.82;
+    ctx.save(); ctx.translate(pX,pY); ctx.rotate(0.25);
+    // Main body box
+    ctx.fillRect(-W*.10,-H*.10,W*.20,H*.10);
+    // Mast broken sideways
+    ctx.save(); ctx.translate(W*.06,-H*.10); ctx.rotate(-0.8);
+    ctx.fillRect(-3,-H*.22,5,H*.22);
+    ctx.beginPath(); ctx.ellipse(0,-H*.22,W*.04,H*.025,0.3,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+    // Wheels — three visible, squashed
+    [[-W*.08,0],[0,H*.01],[W*.08,0]].forEach(([wx,wy])=>{
+        ctx.beginPath(); ctx.ellipse(wx,wy,W*.04,W*.025,0,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='#0e1008';
+        ctx.beginPath(); ctx.ellipse(wx,wy,W*.022,W*.014,0,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle=C.silDark;
+        // Spokes
+        for(let s=0;s<4;s++){
+            const sa=s/4*Math.PI*2;
+            ctx.fillRect(wx+Math.cos(sa)*W*.01-1,wy+Math.sin(sa)*W*.01-1,2,2);
+        }
+    });
+    ctx.restore();
+
+    // Fuel tanks — bloated spherical shapes, one cracked open
+    ctx.save(); ctx.translate(W*.65,H*.78);
+    ctx.beginPath(); ctx.ellipse(0,0,W*.09,H*.06,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#0c0e08';
+    ctx.beginPath(); ctx.ellipse(-W*.02,-H*.01,W*.06,H*.04,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle=C.silDark;
+    // Crack on surface
+    ctx.strokeStyle='rgba(5,7,3,0.9)'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(-W*.04,-H*.02); ctx.lineTo(W*.02,H*.01); ctx.lineTo(W*.05,-H*.01); ctx.stroke();
+    ctx.restore();
+
+    // Second smaller tank nearby
+    ctx.save(); ctx.translate(W*.76,H*.80);
+    ctx.beginPath(); ctx.ellipse(0,0,W*.06,H*.04,0.2,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+
+    // Strewn mechanical parts — gears, panels, tubes
+    ctx.fillStyle=C.silDark;
+    // Gear shape
+    ctx.save(); ctx.translate(W*.88,H*.81);
+    for(let t=0;t<8;t++){
+        ctx.save(); ctx.rotate(t/8*Math.PI*2);
+        ctx.fillRect(-3,-W*.04,6,W*.025); ctx.restore();
+    }
+    ctx.beginPath(); ctx.arc(0,0,W*.03,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#0c0e08';
+    ctx.beginPath(); ctx.arc(0,0,W*.015,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle=C.silDark;
+    ctx.restore();
+
+    // Bent tube structures
+    [[W*.10,H*.82,W*.12,0.10],[W*.46,H*.82,W*.08,-0.08]].forEach(([tx,ty,len,rot])=>{
+        ctx.save(); ctx.translate(tx,ty); ctx.rotate(rot);
+        ctx.fillRect(-4,-H*.06,8,H*.06);
+        ctx.save(); ctx.translate(0,-H*.06); ctx.rotate(0.7);
+        ctx.fillRect(-3,0,6,H*.05); ctx.restore(); ctx.restore();
+    });
+
+    // Ground cracks — more aggressive, alien surface
+    ctx.strokeStyle='rgba(0,0,0,0.65)'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(W*.30,H*.83); ctx.bezierCurveTo(W*.38,H*.82,W*.44,H*.84,W*.50,H*.83); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(W*.55,H*.84); ctx.bezierCurveTo(W*.62,H*.83,W*.70,H*.85,W*.80,H*.83); ctx.stroke();
+
+    _groundShadows(ctx,W,H);
+}
+
+/* ── SPACE 4 — DEEP BLACK / ORBITAL DEBRIS FIELD ─ */
+function sceneSpaceOrbit(ctx, W, H) {
+    // Near-pure black — deep space, no atmosphere
+    const sk=ctx.createLinearGradient(0,0,0,H);
+    sk.addColorStop(0,'#080808'); sk.addColorStop(0.6,'#0e0c10'); sk.addColorStop(1,'#0c0a0e');
+    ctx.fillStyle=sk; ctx.fillRect(0,0,W,H);
+    // Crescent moon — lower left of sky
+    _moon(ctx, W*.15, H*.20, W*.07, 'rgba(190,200,215,0.24)');  // cold blue-white
+    // Very faint starfield
+    ctx.fillStyle='rgba(180,170,190,0.5)';
+    [[W*.08,H*.08],[W*.22,H*.15],[W*.45,H*.06],[W*.60,H*.12],[W*.75,H*.05],[W*.90,H*.18],
+     [W*.15,H*.28],[W*.35,H*.22],[W*.55,H*.30],[W*.80,H*.25],[W*.92,H*.32],
+     [W*.04,H*.40],[W*.28,H*.38],[W*.70,H*.42],[W*.85,H*.36]].forEach(([sx,sy])=>{
+        ctx.beginPath(); ctx.arc(sx,sy,1+Math.random(),0,Math.PI*2); ctx.fill();
+    });
+    // Distant dark planetoid silhouette — upper right
+    ctx.fillStyle='#100e14';
+    ctx.beginPath(); ctx.arc(W*.88,H*.14,W*.22,0,Math.PI*2); ctx.fill();
+    // Surface horizon very low
+    _mountains(ctx,W,H,[[0,.82],[.20,.78],[.40,.80],[.60,.77],[.80,.79],[1,.81]],'#0e0c12');
+    ctx.fillStyle='#0a080c'; ctx.fillRect(0,H*.84,W,H*.16);
+
+    ctx.fillStyle=C.silDark;
+
+    // Large broken space station module — cylindrical hull sections
+    const mX=W*.40, mY=H*.78;
+    // Main hull cylinder
+    ctx.save(); ctx.translate(mX,mY); ctx.rotate(-0.08);
+    ctx.beginPath(); ctx.ellipse(0,0,W*.25,H*.07,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#0a0810';
+    ctx.beginPath(); ctx.ellipse(0,0,W*.20,H*.05,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle=C.silDark;
+    // Docking collar
+    ctx.fillRect(-W*.26,-H*.02,W*.52,H*.04);
+    // End caps
+    ctx.beginPath(); ctx.ellipse(-W*.25,0,H*.04,H*.07,0,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(W*.25,0,H*.04,H*.07,0,0,Math.PI*2); ctx.fill();
+    // Cracks/breaches in hull
+    ctx.strokeStyle='rgba(6,4,8,0.95)'; ctx.lineWidth=2;
+    [[-W*.10,-H*.04,W*.04,H*.02],[W*.06,H*.03,W*.14,-H*.02],[-W*.18,H*.01,-W*.12,H*.05]].forEach(([x1,y1,x2,y2])=>{
+        ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+    });
+    // Solar wing — one snapped
+    ctx.fillStyle=C.silDark;
+    // Intact wing right
+    ctx.fillRect(W*.26,-H*.015,W*.18,H*.03);
+    for(let p=1;p<5;p++) ctx.fillRect(W*.26+W*.18*p/5,-H*.015,1,H*.03);
+    // Broken wing left — bent down
+    ctx.save(); ctx.translate(-W*.26,0); ctx.rotate(0.5);
+    ctx.fillRect(-W*.14,-H*.015,W*.14,H*.03);
+    ctx.restore();
+    ctx.restore();
+
+    // Floating debris — bits scattered around scene at different heights
+    // Helmet
+    ctx.save(); ctx.translate(W*.12,H*.55);
+    ctx.beginPath(); ctx.ellipse(0,0,W*.05,W*.055,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#0a0810';
+    ctx.beginPath(); ctx.ellipse(W*.01,-W*.005,W*.028,W*.022,0.1,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+
+    // Tumbling panel
+    ctx.save(); ctx.translate(W*.80,H*.50); ctx.rotate(0.3);
+    ctx.fillStyle=C.silDark;
+    ctx.fillRect(-W*.08,-H*.04,W*.16,H*.08);
+    for(let g=1;g<4;g++){
+        ctx.fillRect(-W*.08+W*.16*g/4,-H*.04,1,H*.08);
+        ctx.fillRect(-W*.08,-H*.04+H*.08*g/4,W*.16,1);
+    }
+    ctx.restore();
+
+    // Thruster nozzle
+    ctx.save(); ctx.translate(W*.18,H*.72); ctx.rotate(-0.3);
+    ctx.fillStyle=C.silDark;
+    ctx.beginPath(); ctx.moveTo(-8,0); ctx.lineTo(-14,H*.06); ctx.lineTo(14,H*.06); ctx.lineTo(8,0); ctx.closePath(); ctx.fill();
+    ctx.fillRect(-6,-H*.06,12,H*.06);
+    ctx.restore();
+
+    // Twisted strut
+    ctx.save(); ctx.translate(W*.68,H*.65); ctx.rotate(0.7);
+    ctx.fillRect(-3,-H*.14,5,H*.14);
+    ctx.save(); ctx.translate(0,-H*.14); ctx.rotate(-1.1);
+    ctx.fillRect(-3,0,4,H*.08); ctx.restore(); ctx.restore();
+
+    // Ground scatter
+    [[W*.05,H*.84,16,5,0.2],[W*.28,H*.84,12,4,-0.15],[W*.52,H*.84,18,6,0.1],[W*.72,H*.84,10,4,0.25],[W*.90,H*.84,14,5,-0.2]].forEach(([rx,ry,rw,rh,rot])=>{
+        ctx.save(); ctx.translate(rx,ry); ctx.rotate(rot);
+        ctx.fillRect(-rw/2,-rh,rw,rh); ctx.restore();
+    });
+
+    _groundShadows(ctx,W,H);
+}
+
+/* ================================================
+   SCENE HELPERS
+================================================ */
+function _mountains(ctx, W, H, pts, color) {
+    ctx.fillStyle=color; ctx.beginPath(); ctx.moveTo(0,H);
+    pts.forEach(([x,y])=>ctx.lineTo(W*x,H*y));
+    ctx.lineTo(W,H); ctx.closePath(); ctx.fill();
+}
+
+function _bareTree(ctx, tx, ty, h, w, depth) {
+    if (depth===0||h<5) return;
+    ctx.save();
+    ctx.strokeStyle=C.silDark; ctx.lineWidth=w; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(tx,ty); ctx.lineTo(tx,ty-h); ctx.stroke();
+    if(depth>1){
+        const sp=h*.52;
+        _bareTree(ctx,tx-sp*.48,ty-h,h*.56,w*.60,depth-1);
+        _bareTree(ctx,tx+sp*.42,ty-h,h*.50,w*.56,depth-1);
+        if(depth>2) _bareTree(ctx,tx-sp*.12,ty-h*.68,h*.40,w*.46,depth-2);
+    }
+    ctx.restore();
+}
+
+function _arch(ctx, lx, rx, groundY, archH, colW) {
+    ctx.fillStyle=C.silDark;
+    [[lx],[rx]].forEach(([cx])=>{
+        ctx.fillRect(cx-colW*.55, groundY-archH, colW*1.1, archH);
+        ctx.fillRect(cx-colW*.7,  groundY-archH, colW*1.4, archH*.07);
+        ctx.fillRect(cx-colW*.7,  groundY-archH*.08, colW*1.4, archH*.08);
+    });
+    const topY=groundY-archH;
+    ctx.beginPath();
+    ctx.moveTo(lx-colW*.5, topY+archH*.06);
+    ctx.bezierCurveTo(lx-colW*.5,topY-archH*.22,rx+colW*.5,topY-archH*.22,rx+colW*.5,topY+archH*.06);
+    ctx.lineTo(rx-colW*.5, topY+archH*.06);
+    ctx.bezierCurveTo(rx-colW*.5,topY-archH*.08,lx+colW*.5,topY-archH*.08,lx+colW*.5,topY+archH*.06);
+    ctx.closePath(); ctx.fill();
+}
+
+function _groundShadows(ctx, W, H) {
+    ctx.save();
+    const sg=ctx.createLinearGradient(0,H*.80,0,H*.88);
+    sg.addColorStop(0,'rgba(0,0,0,0.28)'); sg.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=sg; ctx.fillRect(0,H*.80,W,H*.08);
+    ctx.strokeStyle='rgba(0,0,0,0.60)'; ctx.lineCap='round';
+    ctx.lineWidth=2.5;
+    ctx.beginPath(); ctx.moveTo(W*.04,H*.82); ctx.bezierCurveTo(W*.14,H*.81,W*.26,H*.83,W*.38,H*.82); ctx.bezierCurveTo(W*.45,H*.82,W*.48,H*.84,W*.50,H*.83); ctx.stroke();
+    ctx.lineWidth=1.2;
+    ctx.beginPath(); ctx.moveTo(W*.22,H*.82); ctx.lineTo(W*.20,H*.86); ctx.lineTo(W*.16,H*.87); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(W*.35,H*.82); ctx.lineTo(W*.38,H*.85); ctx.stroke();
+    ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(W*.52,H*.84); ctx.bezierCurveTo(W*.60,H*.83,W*.70,H*.85,W*.80,H*.83); ctx.bezierCurveTo(W*.87,H*.82,W*.92,H*.83,W*.97,H*.82); ctx.stroke();
+    ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(W*.68,H*.84); ctx.lineTo(W*.72,H*.88); ctx.lineTo(W*.74,H*.90); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(W*.80,H*.83); ctx.lineTo(W*.76,H*.87); ctx.stroke();
+    ctx.fillStyle='rgba(0,0,0,0.28)';
+    [[W*.18,H*.875,22,5,0.08],[W*.58,H*.865,20,5,-0.05],[W*.80,H*.885,16,4,0.10],[W*.08,H*.855,12,3,-0.12],[W*.42,H*.880,14,4,0.04]].forEach(([px,py,rx,ry,rot])=>{
+        ctx.save(); ctx.translate(px,py); ctx.rotate(rot);
+        ctx.beginPath(); ctx.ellipse(0,0,rx/2,ry/2,0,0,Math.PI*2); ctx.fill();
+        ctx.restore();
+    });
+    ctx.restore();
+}
+
+function _pipes(ctx, W, H, groundY, seed) {
+    ctx.save();
+    ctx.fillStyle = C.silDark;
+    ctx.lineCap = 'square';
+    let _s = seed || 42;
+    const rng = () => { _s = (_s * 1664525 + 1013904223) & 0xffffffff; return Math.abs(_s) / 0x7fffffff; };
+    const pipe = (x, y, w, h) => { if(w!==0&&h!==0) ctx.fillRect(x, y, w, h); };
+    const collar = (cx, cy, pw) => ctx.fillRect(cx - pw*0.9, cy - pw*0.4, pw*1.8, pw*0.8);
+
+    // Big diameters — more like main screen
+    const pipeDiams = [12, 16, 20, 24, 28];
+
+    // 5-8 main vertical pipes across the width
+    const numPipes = 5 + Math.floor(rng()*4);
+    for (let v=0; v<numPipes; v++) {
+        const vx  = W*(0.06 + v/numPipes*0.88 + (rng()-0.5)*0.06);
+        const pd  = pipeDiams[Math.floor(rng()*pipeDiams.length)];
+        // Height: from ground up, varying — some tall, some mid
+        const ph  = H*(0.30 + rng()*0.55);
+        const topY = groundY - ph;
+
+        // Main shaft
+        ctx.fillStyle = C.silDark;
+        pipe(vx - pd/2, topY, pd, ph);
+
+        // 1-3 collars along shaft
+        const numC = 1 + Math.floor(rng()*3);
+        for (let c=0; c<numC; c++) {
+            const cy = topY + ph*(0.25 + c*0.22 + rng()*0.1);
+            collar(vx, cy, pd);
+
+            // ~50% chance: horizontal branch from this collar
+            if (rng() > 0.50) {
+                const dir    = rng()>0.5 ? 1 : -1;
+                const bpd    = pipeDiams[Math.floor(rng()*3)]; // branch thinner or same
+                const bLen   = W*(0.06 + rng()*0.18);
+                const endX   = vx + dir*(pd/2 + bLen);
+
+                // Elbow corner fill
+                ctx.fillRect(vx + (dir>0?pd/2:-pd/2) - bpd*0.4, cy - bpd/2, bpd*0.8, bpd);
+                // Horizontal run
+                pipe(vx + dir*pd/2, cy - bpd/2, dir*bLen, bpd);
+                // Collar at end of branch
+                ctx.fillRect(endX - bpd*0.9, cy - bpd*0.4, bpd*1.8, bpd*0.8);
+
+                // 40% chance: short drop pipe hanging from end of branch
+                if (rng() > 0.60) {
+                    const dropPd  = Math.max(8, bpd - 4);
+                    const dropLen = H*(0.05 + rng()*0.12);
+                    pipe(endX - dropPd/2, cy + bpd/2, dropPd, dropLen);
+                    collar(endX, cy + bpd/2 + dropLen*0.5, dropPd);
+                    // Cap at bottom of drop
+                    ctx.fillRect(endX - dropPd*1.1, cy + bpd/2 + dropLen - dropPd*0.5, dropPd*2.2, dropPd*0.5);
+                }
+            }
+        }
+
+        // Top cap — flanged
+        const capPd = pd*2.0;
+        ctx.fillRect(vx - capPd/2, topY - pd*0.8, capPd, pd*0.8);
+        ctx.fillRect(vx - pd*1.1,  topY - pd*1.5, pd*2.2, pd*0.7);
+
+        // Base plate at ground
+        ctx.fillRect(vx - pd*1.4, groundY - pd*0.6, pd*2.8, pd*0.6);
+    }
+
+    ctx.restore();
+}
+
+function _ruinSkyline(ctx, W, H, color, yTop, yBot) {
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.moveTo(0, H);
+    const pts = [
+        [0,yBot],[0.04,yBot],[0.04,yTop+0.08],[0.06,yTop+0.06],[0.06,yTop+0.02],[0.07,yTop+0.02],
+        [0.07,yTop+0.06],[0.10,yTop+0.06],[0.10,yTop+0.12],[0.14,yTop+0.12],[0.14,yTop+0.05],
+        [0.16,yTop+0.03],[0.18,yTop+0.05],[0.18,yTop+0.10],[0.22,yTop+0.10],[0.22,yTop+0.18],
+        [0.26,yTop+0.18],[0.26,yTop+0.07],[0.27,yTop+0.04],[0.29,yTop+0.04],[0.30,yTop+0.07],
+        [0.30,yTop+0.14],[0.35,yTop+0.14],[0.35,yTop+0.20],[0.40,yTop+0.20],[0.40,yTop+0.09],
+        [0.42,yTop+0.06],[0.44,yTop+0.09],[0.44,yTop+0.14],[0.50,yTop+0.14],[0.50,yTop+0.22],
+        [0.54,yTop+0.22],[0.54,yTop+0.06],[0.56,yTop+0.03],[0.57,yTop+0.06],[0.58,yTop+0.06],
+        [0.58,yTop+0.10],[0.62,yTop+0.10],[0.62,yTop+0.18],[0.68,yTop+0.18],[0.68,yTop+0.08],
+        [0.70,yTop+0.05],[0.72,yTop+0.08],[0.76,yTop+0.08],[0.76,yTop+0.15],[0.80,yTop+0.15],
+        [0.80,yTop+0.07],[0.82,yTop+0.04],[0.83,yTop+0.07],[0.86,yTop+0.07],[0.86,yTop+0.12],
+        [0.90,yTop+0.12],[0.90,yTop+0.20],[0.94,yTop+0.20],[0.94,yTop+0.08],[0.96,yTop+0.05],
+        [0.98,yTop+0.08],[1.0,yTop+0.08],[1.0,yBot],
+    ];
+    pts.forEach(([x,y]) => ctx.lineTo(W*x, H*y));
+    ctx.closePath(); ctx.fill();
+}
+
+function _moon(ctx, x, y, r, color) {
+    ctx.save();
+    const col = color || 'rgba(200,195,185,0.22)';
+    // Outer glow
+    const glow = ctx.createRadialGradient(x, y, r*0.5, x, y, r*2.5);
+    glow.addColorStop(0, col.replace(/[\d.]+\)$/, '0.12)'));
+    glow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(x, y, r*2.5, 0, Math.PI*2); ctx.fill();
+    // Moon disc
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
+    // Subtle craters
+    ctx.fillStyle = 'rgba(0,0,0,0.10)';
+    [[x-r*.28, y-r*.22, r*.18],[x+r*.28, y+r*.18, r*.13],[x-r*.08, y+r*.32, r*.10]].forEach(([cx,cy,cr])=>{
+        ctx.beginPath(); ctx.arc(cx,cy,cr,0,Math.PI*2); ctx.fill();
+    });
+    ctx.restore();
+}
+const Vents = {
+    vents: [], W: 0, H: 0,
+    init(W, H) {
+        this.W=W; this.H=H;
+        this._setVents(W, H, [0.18, 0.50, 0.82]);  // default spread
+    },
+    setPositions(xFractions) {
+        // xFractions: array of 2-3 x positions as fractions of W
+        this._setVents(this.W, this.H, xFractions);
+    },
+    _setVents(W, H, xs) {
+        this.vents = xs.map((x, i) => ({
+            x: W*x,
+            y: H*(0.848 + (i%2)*0.012),  // slight height variation
+            mist: []
+        }));
+        this.vents.forEach(v=>{v.mist=Array.from({length:5},()=>this._mkMist(v,true));});
+    },
+    randomVent() { return this.vents[Math.floor(Math.random()*this.vents.length)]; },
+    _mkMist(v,scatter) {
+        return {x:v.x+(Math.random()-.5)*12, y:scatter?v.y-Math.random()*38:v.y-6,
+                r:2+Math.random()*4, vx:(Math.random()-.5)*.14, vy:-(0.16+Math.random()*.26),
+                life:scatter?Math.random():0, alpha:0};
+    },
+    update() {
+        this.vents.forEach(v=>{
+            v.mist.forEach(p=>{
+                p.x+=p.vx; p.y+=p.vy; p.r+=0.04; p.life+=0.006;
+                p.alpha=Math.sin(p.life*Math.PI)*0.10;
+                if(p.life>=1) Object.assign(p,this._mkMist(v,false));
+            });
+        });
+    },
+    draw(ctx) { this.vents.forEach(v=>this._drawVent(ctx,v)); },
+    _drawVent(ctx,v) {
+        const fx=v.x, fy=v.y; ctx.save();
+        const shadowG=ctx.createRadialGradient(fx,fy+14,0,fx,fy+14,50);
+        shadowG.addColorStop(0,'rgba(0,0,0,0.40)'); shadowG.addColorStop(1,'rgba(0,0,0,0)');
+        ctx.fillStyle=shadowG; ctx.beginPath(); ctx.ellipse(fx,fy+16,50,12,0,0,Math.PI*2); ctx.fill();
+        const wg=ctx.createRadialGradient(fx,fy,0,fx,fy,70);
+        wg.addColorStop(0,'rgba(190,105,18,0.42)'); wg.addColorStop(0.3,'rgba(150,75,12,0.22)'); wg.addColorStop(1,'rgba(0,0,0,0)');
+        ctx.fillStyle=wg; ctx.beginPath(); ctx.ellipse(fx,fy,70,32,0,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='#0e0d0c';
+        ctx.beginPath(); ctx.moveTo(fx-36,fy+7); ctx.bezierCurveTo(fx-32,fy+1,fx-18,fy-3,fx-4,fy-4);
+        ctx.bezierCurveTo(fx+8,fy-5,fx+22,fy-3,fx+32,fy+3); ctx.bezierCurveTo(fx+38,fy+8,fx+32,fy+14,fx+12,fy+15);
+        ctx.bezierCurveTo(fx-2,fy+16,fx-18,fy+15,fx-28,fy+11); ctx.bezierCurveTo(fx-38,fy+9,fx-38,fy+8,fx-36,fy+7); ctx.closePath(); ctx.fill();
+        ctx.fillStyle='#070605';
+        ctx.beginPath(); ctx.moveTo(fx-18,fy+6); ctx.bezierCurveTo(fx-14,fy+1,fx-5,fy-1,fx+6,fy-1);
+        ctx.bezierCurveTo(fx+16,fy,fx+20,fy+4,fx+18,fy+9); ctx.bezierCurveTo(fx+14,fy+12,fx+3,fy+13,fx-8,fy+12);
+        ctx.bezierCurveTo(fx-18,fy+11,fx-20,fy+9,fx-18,fy+6); ctx.closePath(); ctx.fill();
+        ctx.strokeStyle='rgba(5,4,3,0.85)'; ctx.lineCap='round'; ctx.lineWidth=1.1;
+        [[-30,10,-46,20],[-22,3,-34,-4],[16,2,26,-6],[26,12,40,20],[-8,15,-12,24],[8,14,10,24],[-18,1,-28,-8],[22,-1,34,-10]].forEach(([x1,y1,x2,y2])=>{
+            ctx.beginPath(); ctx.moveTo(fx+x1,fy+y1); ctx.lineTo(fx+x2,fy+y2); ctx.stroke();
+        });
+        v.mist.forEach(p=>{
+            const mg=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r);
+            mg.addColorStop(0,`rgba(210,155,80,${p.alpha})`); mg.addColorStop(1,'rgba(0,0,0,0)');
+            ctx.fillStyle=mg; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+        });
+        ctx.restore();
+    },
+};
+
+
+/* ================================================
+   RAT — random surprise, ~30% of games, one fast pass
+================================================ */
+const Rat = {
+    active: false,
+    x: 0, y: 0,
+    dir: 1,
+    vx: 0,
+    legT: 0,
+    tailWag: 0,
+
+    init(W, H) {
+        if (Math.random() > 0.30) { this.active=false; return; }
+        this.active = true;
+        this.dir    = Math.random()>0.5 ? 1 : -1;
+        this.x      = this.dir===1 ? -50 : W+50;
+        this.y      = H*0.80 - 12;
+        this.vx     = this.dir * (3.5 + Math.random()*2.0);
+    },
+
+    update(W, H) {
+        if (!this.active) return;
+        this.x      += this.vx;
+        this.legT   += 0.35;
+        this.tailWag+= 0.22;
+        if (this.x < -80 || this.x > W+80) this.active = false;
+    },
+
+    draw(ctx) {
+        if (!this.active) return;
+        const {x, y, dir, tailWag, legT} = this;
+        ctx.save();
+        ctx.translate(x, y);
+        if (dir === -1) ctx.scale(-1, 1);
+        ctx.fillStyle = '#0d0c0b';
+
+        // Body
+        ctx.beginPath(); ctx.ellipse(0, 0, 14, 7, 0.15, 0, Math.PI*2); ctx.fill();
+        // Head
+        ctx.beginPath(); ctx.ellipse(16, -3, 8, 5, 0.2, 0, Math.PI*2); ctx.fill();
+        // Nose
+        ctx.beginPath(); ctx.ellipse(23, -2, 3, 2, 0, 0, Math.PI*2); ctx.fill();
+        // Ear
+        ctx.beginPath(); ctx.ellipse(13, -8, 3.5, 4.5, -0.3, 0, Math.PI*2); ctx.fill();
+        // Eye
+        ctx.fillStyle = '#252018';
+        ctx.beginPath(); ctx.arc(19, -4, 1.3, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#0d0c0b';
+
+        // Tail
+        ctx.strokeStyle='#0d0c0b'; ctx.lineWidth=2.5; ctx.lineCap='round';
+        ctx.beginPath();
+        ctx.moveTo(-13, 0);
+        ctx.bezierCurveTo(-22, -5, -28, Math.sin(tailWag)*9, -35, Math.sin(tailWag)*13);
+        ctx.stroke();
+
+        // Legs — 3 pairs, animated
+        ctx.lineWidth=2; ctx.lineCap='round';
+        [[-6,8],[1,8],[7,8]].forEach(([lx,ly],i) => {
+            const swing = Math.sin(legT + i*1.1) * 6;
+            ctx.strokeStyle='#0d0c0b';
+            ctx.beginPath(); ctx.moveTo(lx,2); ctx.lineTo(lx+swing, ly); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(lx,2); ctx.lineTo(lx-swing, ly); ctx.stroke();
+        });
+
+        ctx.restore();
+    },
+};
+let bubbles = [];
+let badId   = null;
+let nextId  = 0;
+let spawnT  = 0;
+let popCount = 0;          // how many bubbles popped this game
+const GRACE_POPS = 8;      // bad bubble can't be assigned until after this many pops
+const SPAWN_EVERY = 50;
+const MAX_BUB     = 11;
+const MIN_BUB     = 6;
+
+function mkBubble(W, H, scatter) {
+    const id = nextId++;
+    const r  = 8 + Math.random() * 14;  // 8–22px radius — fits through vent opening
+    const vent = Vents.vents.length ? Vents.randomVent() : {x:W*0.5, y:H*0.85};
+    const angle = -Math.PI/2 + (Math.random()-.5)*.65;
+    const spd   = 1.0 + Math.random()*1.2;
+    const b = {
+        id,
+        x: vent.x + (Math.random()-.5)*22,
+        y: vent.y - 14,
+        r,
+        vx: Math.cos(angle)*spd*.55,
+        vy: Math.sin(angle)*spd,
+        wobble: Math.random()*Math.PI*2,
+        wFreq:  0.28 + Math.random()*.40,
+        alpha:  0,
+        fadingIn:  true,
+        fadingOut: false,
+        driftT: 0,
+        driftI: 200 + Math.random()*300,
+    };
+    if (scatter) {
+        b.y     = vent.y - 80 - Math.random()*(H*.60);
+        b.x     = W*0.08 + Math.random()*W*0.84;
+        b.alpha = 0.30 + Math.random()*.55;
+        b.fadingIn = b.alpha < 0.85;
+        b.vy    = -(0.28 + Math.random()*.55);
+        b.vx    = (Math.random()-.5)*.35;
+    }
+    return b;
+}
+
+function drawBubble(ctx, b) {
+    if (b.alpha <= 0.01) return;
+    ctx.save(); ctx.globalAlpha = b.alpha;
+    const {x, y, r} = b;
+
+    // Each bubble gets a slightly randomised hue — amber to toxic green
+    const hue = b.hue || (b.hue = 45 + Math.floor(Math.random() * 55)); // 45=amber, 100=yellow-green
+
+    // Outer glow — radioactive bloom
+    const glow = ctx.createRadialGradient(x, y, r*0.5, x, y, r*2.0);
+    glow.addColorStop(0, `hsla(${hue},100%,55%,0.18)`);
+    glow.addColorStop(1, `hsla(${hue},100%,40%,0)`);
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(x, y, r*2.0, 0, Math.PI*2); ctx.fill();
+
+    // Main body — opaque, dark centre fading to vivid rim
+    const body = ctx.createRadialGradient(x-r*.2, y-r*.25, r*.05, x, y, r);
+    body.addColorStop(0,   `hsla(${hue},70%,22%,0.92)`);   // dark centre
+    body.addColorStop(0.55, `hsla(${hue},90%,38%,0.88)`);  // mid glow
+    body.addColorStop(1,    `hsla(${hue},100%,58%,0.95)`); // vivid edge
+    ctx.fillStyle = body;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
+
+    // Rim — bright hot edge
+    ctx.strokeStyle = `hsla(${hue},100%,72%,0.9)`;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.stroke();
+
+    // Inner shine — top-left hot spot
+    const shine = ctx.createRadialGradient(x-r*.32, y-r*.34, 0, x-r*.18, y-r*.20, r*.38);
+    shine.addColorStop(0,   `hsla(${hue+20},100%,90%,0.75)`);
+    shine.addColorStop(0.5, `hsla(${hue},100%,70%,0.20)`);
+    shine.addColorStop(1,   'rgba(0,0,0,0)');
+    ctx.fillStyle = shine;
+    ctx.beginPath(); ctx.arc(x-r*.18, y-r*.20, r*.38, 0, Math.PI*2); ctx.fill();
+
+    // Small bottom glint
+    const glint = ctx.createRadialGradient(x+r*.28, y+r*.28, 0, x+r*.28, y+r*.28, r*.14);
+    glint.addColorStop(0, `hsla(${hue+10},100%,85%,0.35)`);
+    glint.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = glint;
+    ctx.beginPath(); ctx.arc(x+r*.28, y+r*.28, r*.14, 0, Math.PI*2); ctx.fill();
+
+    ctx.restore();
+}
+
+/* ================================================
+   PARTICLES — amber burst on pop
+================================================ */
+let particles = [];
+function spawnBurst(x, y, r) {
+    const count = 10 + Math.floor(Math.random()*6);
+    for (let i=0;i<count;i++) {
+        const angle=(Math.PI*2*i/count)+(Math.random()-.5)*0.5;
+        const spd=(1.5+Math.random()*2.8)*(r/28);
+        particles.push({x,y,vx:Math.cos(angle)*spd,vy:Math.sin(angle)*spd-0.8,
+            r:3+Math.random()*5,alpha:0.90+Math.random()*.10,life:0,
+            maxLife:40+Math.floor(Math.random()*25)});  // longer life
+    }
+    // Two rings — inner and outer
+    particles.push({ring:true,x,y,r:r*0.4,maxR:r*2.8,alpha:0.8,life:0,maxLife:30});
+    particles.push({ring:true,x,y,r:r*0.2,maxR:r*1.6,alpha:0.5,life:0,maxLife:22});
+}
+function updateParticles() {
+    particles.forEach(p=>{
+        p.life++;
+        if(p.ring){p.r+=(p.maxR-p.r)*0.22;p.alpha=Math.max(0,0.7*(1-p.life/p.maxLife));}
+        else{p.x+=p.vx;p.y+=p.vy;p.vy+=0.08;p.vx*=0.92;p.vy*=0.92;p.alpha=Math.max(0,0.9*(1-p.life/p.maxLife));p.r*=0.97;}
+    });
+    particles=particles.filter(p=>p.alpha>0&&p.life<p.maxLife);
+}
+function drawParticles(ctx) {
+    particles.forEach(p=>{
+        ctx.save(); ctx.globalAlpha=p.alpha;
+        if(p.ring){ctx.strokeStyle=`hsla(${70+Math.random()*40},100%,65%,${p.alpha*0.8})`;ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.stroke();}
+        else{const hue=45+Math.random()*55;const g=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r);g.addColorStop(0,`hsla(${hue},100%,75%,${p.alpha})`);g.addColorStop(1,`hsla(${hue},100%,45%,0)`);ctx.fillStyle=g;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();}
+        ctx.restore();
+    });
+}
+
+function updateBubbles(W, H) {
+    spawnT++;
+    if (spawnT >= SPAWN_EVERY && bubbles.length < MAX_BUB) {
+        spawnT = 0;
+        bubbles.push(mkBubble(W, H, false));
+        ensureBadBubble();
+    }
+    if (bubbles.length < MIN_BUB) spawnT = SPAWN_EVERY;
+
+    // Update each
+    bubbles.forEach(b => {
+        if (b.fadingIn) {
+            b.alpha = Math.min(b.alpha + 0.020, 0.90);
+            if (b.alpha >= 0.90) b.fadingIn = false;
+        }
+
+        b.wobble += 0.011;
+        b.driftT++;
+        if (b.driftT >= b.driftI) {
+            b.driftT = 0;
+            b.driftI = 200 + Math.random()*300;
+            b.vx += (Math.random()-.5)*.18;
+        }
+
+        b.vx += Math.sin(b.wobble * b.wFreq) * 0.003;
+        b.x  += b.vx;
+        b.y  += b.vy;
+        b.vy *= 0.997;   // very light damping — keeps rising a long time
+        b.vx *= 0.974;
+
+        // Cap horizontal drift
+        if (Math.abs(b.vx) > 0.8) b.vx *= 0.85;
+
+        // Wall bounce
+        if (b.x - b.r < 4)       { b.x = b.r + 4;     b.vx =  Math.abs(b.vx)*.35; }
+        if (b.x + b.r > W - 4)   { b.x = W-b.r-4;     b.vx = -Math.abs(b.vx)*.35; }
+
+        // Fade at top
+        if (b.y - b.r < H*.09) b.fadingOut = true;
+        if (b.fadingOut) b.alpha = Math.max(b.alpha - 0.014, 0);
+    });
+
+    // Cull
+    const had = bubbles.length;
+    bubbles = bubbles.filter(b => !(b.fadingOut && b.alpha <= 0));
+    if (bubbles.length < had && !bubbles.find(b=>b.id===badId)) ensureBadBubble();
+
+    // Counter exclusion zone — push bubbles away from top-left counter area
+    const cZoneW = 170, cZoneH = 120;
+    bubbles.forEach(b => {
+        if (b.fadingOut) return;
+        // If bubble center is inside the zone, force it out fast
+        if (b.x - b.r < cZoneW && b.y - b.r < cZoneH) {
+            // Track how long it's been stuck in zone
+            b.stuckT = (b.stuckT || 0) + 1;
+            // Push right if on left half, push up always
+            b.vx += (b.x < cZoneW * 0.5) ? 0.4 : 0.2;
+            b.vy -= 0.35;  // always push upward
+            // If stuck more than 2 seconds, just fade it out
+            if (b.stuckT > 120) b.fadingOut = true;
+        } else {
+            b.stuckT = 0;
+        }
+    });
+
+    // Soft separation
+    for (let i=0;i<bubbles.length;i++) {
+        for (let j=i+1;j<bubbles.length;j++) {
+            const a=bubbles[i], b2=bubbles[j];
+            const dx=b2.x-a.x, dy=b2.y-a.y;
+            const d=Math.sqrt(dx*dx+dy*dy)||.01;
+            const minD=a.r+b2.r+2;
+            if (d<minD) {
+                const push=(minD-d)*0.09, nx=dx/d, ny=dy/d;
+                a.x-=nx*push; a.y-=ny*push;
+                b2.x+=nx*push; b2.y+=ny*push;
+            }
+        }
+    }
+}
+
+function ensureBadBubble() {
+    // Don't assign bad bubble until player has popped at least GRACE_POPS bubbles
+    if (popCount < GRACE_POPS) { badId = null; return; }
+    if (bubbles.find(b=>b.id===badId && !b.fadingOut && b.alpha>0.28)) return;
+    const pool = bubbles.filter(b=>!b.fadingOut && b.alpha>0.28);
+    if (!pool.length) return;
+    badId = pool[Math.floor(Math.random()*pool.length)].id;
+}
+
+/* ================================================
+   DYING STATE — staggered chain pop with amber bursts
+================================================ */
+let dyingT    = 0;
+let shockwaves = [];
+let chainDone  = false;
+
+function triggerChainPop(badX, badY, snapshot) {
+    chainDone = false;
+
+    if (!snapshot || snapshot.length === 0) {
+        setTimeout(() => { if (gs===GS.DYING) { shockwaves=[]; chainDone=true; } }, 1200);
+        return;
+    }
+
+    // All remaining bubbles explode simultaneously
+    snapshot.forEach(s => spawnBurst(s.x, s.y, s.r));
+
+    // Rapid-fire pops — satisfying cluster
+    snapshot.forEach((s, i) => {
+        setTimeout(() => { if (gs===GS.DYING) SoundEngine.playPop(); }, i * 30);
+    });
+
+    // Wait for particles to settle then end
+    setTimeout(() => { if (gs===GS.DYING) { shockwaves=[]; chainDone=true; } }, 1800);
+}
+
+function updateDying() {
+    dyingT++;
+    shockwaves=shockwaves.filter(sw=>sw.alpha>0);
+    shockwaves.forEach(sw=>{sw.r+=(sw.maxR-sw.r)*0.055;sw.alpha=Math.max(0,sw.alpha-0.013);});
+    updateParticles();
+    if (chainDone) { chainDone=false; _showEnd(); }
+}
+
+function drawDyingFx(ctx) {
+    shockwaves.forEach(sw=>{
+        ctx.save(); ctx.globalAlpha=sw.alpha;
+        ctx.strokeStyle='rgba(220,170,70,0.65)'; ctx.lineWidth=1.5;
+        ctx.beginPath(); ctx.arc(sw.x,sw.y,sw.r,0,Math.PI*2); ctx.stroke();
+        ctx.restore();
+    });
+    drawParticles(ctx);
+}
+
+/* ================================================
+   GAME STATE
+================================================ */
+const GS = { MENU:'menu', PLAY:'play', DYING:'dying', END:'end' };
+let gs      = GS.MENU;
+let score   = 0;
+let best    = parseInt(localStorage.getItem('bb_best_v4'))||0;
+let showCounter = false;
+
+function startGame() {
+    document.getElementById('start-screen').style.display = 'none';
+    document.getElementById('end-screen').classList.remove('show','fade');
+    document.getElementById('end-screen').style.display = 'none';
+    showCounter = false;
+
+    score   = 0;
+    bubbles = [];
+    badId   = null;
+    spawnT  = 0;
+    nextId  = 0;
+    dyingT  = 0;
+    popCount   = 0;
+    particles  = [];
+    shockwaves = [];
+    chainDone  = false;
+
+    // Pick a fresh gameplay scene (not ruins)
+    bakeScene(W, H);
+
+    // Seed scattered bubbles
+    for (let i=0;i<MIN_BUB+2;i++) bubbles.push(mkBubble(W, H, true));
+    ensureBadBubble();
+
+    gs = GS.PLAY;
+    showCounter = true;
+    document.getElementById('exit-btn').style.display = 'block';
+    Rat.init(W, H);
+    SoundEngine.resume();
+}
+
+function _popGood(b, idx) {
+    score++;
+    popCount++;
+    _updateCounter();
+    SoundEngine.playPop();
+    spawnBurst(b.x, b.y, b.r);
+    b.fadingOut = true;
+    setTimeout(() => {
+        bubbles = bubbles.filter(x=>x.id!==b.id);
+        ensureBadBubble();
+    }, 220);
+}
+
+function _popBad(b) {
+    document.getElementById('exit-btn').style.display = 'none';
+    showCounter = false;
+    const bx = b.x, by = b.y;
+
+    // Bad bubble's big burst + fart
+    spawnBurst(bx, by, b.r * 1.6);
+    SoundEngine.playWhoosh();
+
+    // Wipe all bubbles immediately — screen goes clean
+    bubbles = [];
+    gs = GS.DYING;
+    dyingT = 0;
+    shockwaves = [];
+    chainDone = false;
+    if (score > best) { best = score; localStorage.setItem('bb_best_v4', best); }
+
+    // Slow shockwave ring expands while we wait
+    shockwaves.push({ x:bx, y:by, r:8, maxR:Math.max(W,H)*.85, alpha:0.70 });
+
+    SoundEngine.fadeOut(4.0);
+
+    // 3 seconds of silence, then straight to end screen
+    setTimeout(() => {
+        if (gs === GS.DYING) { shockwaves=[]; chainDone=true; }
+    }, 3000);
+}
+
+function _showEnd() {
+    gs = GS.END;
+    sceneBitmap = menuBitmap;
+    showCounter = false;
+    document.getElementById('exit-btn').style.display = 'none';
+    document.getElementById('end-num').textContent  = score;
+    document.getElementById('end-best').textContent = 'best \u2014 ' + best;
+    const el = document.getElementById('end-screen');
+    el.style.display = 'flex';
+    el.classList.add('show');
+    requestAnimationFrame(()=>requestAnimationFrame(()=>el.classList.add('fade')));
+}
+
+function goHome() {
+    gs = GS.MENU;
+    bubbles = [];
+    badId = null;
+    shockwaves = [];
+    particles = [];
+    chainDone = false;
+    Rat.active = false;
+    sceneBitmap = menuBitmap;
+    showCounter = false;
+    document.getElementById('exit-btn').style.display = 'none';
+    document.getElementById('end-screen').classList.remove('show','fade');
+    document.getElementById('end-screen').style.display = 'none';
+    document.getElementById('start-screen').style.display = 'flex';
+    SoundEngine.fadeOut(0.8);  // fades bubbles only, music continues
+    for (let i=0;i<6;i++) bubbles.push(mkBubble(W, H, true));
+}
+
+function _updateCounter() {
+    // counter drawn on canvas
+    // counter drawn on canvas
+}
+
+/* ================================================
+   HIT TEST
+================================================ */
+function onTap(cx, cy) {
+    if (gs === GS.MENU || gs === GS.END) { startGame(); return; }
+    if (gs !== GS.PLAY) return;
+
+    for (let i = bubbles.length-1; i>=0; i--) {
+        const b = bubbles[i];
+        if (b.fadingOut || b.alpha<0.15) continue;
+        const dx=cx-b.x, dy=cy-b.y;
+        const tapR = b.r + 14; // generous tap area for mobile
+        if (dx*dx+dy*dy <= tapR*tapR) {
+            if (b.id===badId) _popBad(b);
+            else              _popGood(b, i);
+            return;
+        }
+    }
+}
+
+/* ================================================
+   VOLUME CONTROL — state
+================================================ */
+let masterVolume = 0.80;
+let isMuted = false;
+
+/* ================================================
+   SOUND ENGINE — file-based audio
+================================================ */
+const SoundEngine = {
+    actx: null, gain: null, on: false,
+    _bubblesEl: null, _musicEl: null, _popEl: null, _fartEl: null,
+
+    resume() {
+        if (this.on) { this._applyAll(); return; }
+        try {
+            this.actx = new (window.AudioContext||window.webkitAudioContext)();
+            if (this.actx.state === 'suspended') this.actx.resume();
+            this._initAudio();
+            this.on = true;
+        } catch(e){}
+    },
+
+    _initAudio() {
+        // Ambient bubbling loop
+        this._bubblesEl = new Audio('audio/bubbles.mp3');
+        this._bubblesEl.loop = true;
+        this._bubblesEl.volume = 0;
+        this._bubblesEl.play().catch(()=>{});
+
+        // Background music loop
+        this._musicEl = new Audio('audio/music.mp3');
+        this._musicEl.loop = true;
+        this._musicEl.volume = 0;
+        this._musicEl.play().catch(()=>{});
+
+        // Fade both in gently
+        let step = 0;
+        const fadeIn = setInterval(() => {
+            step++;
+            const base = isMuted ? 0 : masterVolume;
+            if (this._bubblesEl) this._bubblesEl.volume = Math.min(step*0.003, base*0.04);  // very quiet bg
+            if (this._musicEl)   this._musicEl.volume   = Math.min(step*0.020, base*0.65);  // music prominent
+            if (step >= 35) clearInterval(fadeIn);
+        }, 80);
+
+        // Preload one-shot sounds
+        this._popEl  = new Audio('audio/pop.mp3');
+        this._fartEl = new Audio('audio/fart.mp3');
+    },
+
+    _applyAll() {
+        if (!this.on) return;
+        const base = isMuted ? 0 : masterVolume;
+        if (this._bubblesEl) this._bubblesEl.volume = base * 0.04;
+        if (this._musicEl)   this._musicEl.volume   = base * 0.65;
+    },
+
+    _setVol(v) { this._applyAll(); },
+
+    fadeOut(sec) {
+        // Only fade bubbles — music plays continuously at all times
+        if (!this._bubblesEl) return;
+        const bStart = this._bubblesEl.volume;
+        const steps = Math.max(1, sec * 20);
+        let n = 0;
+        const t = setInterval(() => {
+            n++;
+            if (this._bubblesEl) this._bubblesEl.volume = Math.max(0, bStart*(1-n/steps));
+            if (n >= steps) clearInterval(t);
+        }, 1000/20);
+    },
+
+    playPop() {
+        // Shooting-star chime from Raindrops space scene
+        if (isMuted || !this.actx) return;
+        try {
+            const actx = this.actx, now = actx.currentTime;
+            const f = 180 + Math.random()*120;
+            const o = actx.createOscillator(), g = actx.createGain();
+            o.type = 'sine';
+            o.frequency.setValueAtTime(f*1.6, now);
+            o.frequency.exponentialRampToValueAtTime(f, now+0.06);
+            g.gain.setValueAtTime(0.0, now);
+            g.gain.linearRampToValueAtTime(0.22 * masterVolume, now+0.008);
+            g.gain.exponentialRampToValueAtTime(0.010, now+0.12);
+            g.gain.exponentialRampToValueAtTime(0.001, now+0.4);
+            o.connect(g); g.connect(actx.destination);
+            o.start(now); o.stop(now+0.4);
+            const o2 = actx.createOscillator(), g2 = actx.createGain();
+            o2.type = 'sine'; o2.frequency.value = f*0.5;
+            g2.gain.setValueAtTime(0.14 * masterVolume, now);
+            g2.gain.exponentialRampToValueAtTime(0.001, now+0.18);
+            o2.connect(g2); g2.connect(actx.destination);
+            o2.start(now); o2.stop(now+0.18);
+        } catch(e){}
+    },
+
+    playWhoosh() {
+        // Enhanced dark chime — deep, wet, with reverb tail
+        if (isMuted || !this.actx) return;
+        try {
+            const actx = this.actx, now = actx.currentTime;
+            const f = 60 + Math.random()*40;
+
+            // Fake reverb via noise convolver
+            const rLen = actx.sampleRate * 2.2;
+            const rBuf = actx.createBuffer(2, rLen, actx.sampleRate);
+            for (let ch=0; ch<2; ch++) {
+                const d = rBuf.getChannelData(ch);
+                for (let i=0; i<rLen; i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/rLen, 2.5);
+            }
+            const reverb = actx.createConvolver(); reverb.buffer = rBuf;
+            const revG = actx.createGain(); revG.gain.value = 0.50 * masterVolume;
+            reverb.connect(revG); revG.connect(actx.destination);
+            const dryG = actx.createGain(); dryG.gain.value = 0.65 * masterVolume;
+            dryG.connect(actx.destination); dryG.connect(reverb);
+
+            // Deep swoop
+            const o1 = actx.createOscillator(), g1 = actx.createGain();
+            o1.type = 'sine';
+            o1.frequency.setValueAtTime(f*2.2, now);
+            o1.frequency.exponentialRampToValueAtTime(f*0.7, now+0.3);
+            g1.gain.setValueAtTime(0.0, now); g1.gain.linearRampToValueAtTime(0.9, now+0.015);
+            g1.gain.exponentialRampToValueAtTime(0.04, now+0.5); g1.gain.exponentialRampToValueAtTime(0.001, now+1.8);
+            o1.connect(g1); g1.connect(dryG); o1.start(now); o1.stop(now+1.8);
+
+            // Sub bass
+            const o2 = actx.createOscillator(), g2 = actx.createGain();
+            o2.type = 'sine'; o2.frequency.value = f*0.5;
+            g2.gain.setValueAtTime(0.7, now); g2.gain.exponentialRampToValueAtTime(0.001, now+0.6);
+            o2.connect(g2); g2.connect(dryG); o2.start(now); o2.stop(now+0.6);
+
+            // Gritty distorted harmonic
+            const o3 = actx.createOscillator(), g3 = actx.createGain();
+            const dist = actx.createWaveShaper();
+            const curve = new Float32Array(256);
+            for (let i=0; i<256; i++) { const x=i*2/256-1; curve[i]=Math.tanh(x*4); }
+            dist.curve = curve;
+            o3.type = 'sawtooth';
+            o3.frequency.setValueAtTime(f*1.5, now); o3.frequency.exponentialRampToValueAtTime(f*0.6, now+0.25);
+            g3.gain.setValueAtTime(0.15, now); g3.gain.exponentialRampToValueAtTime(0.001, now+0.35);
+            o3.connect(dist); dist.connect(g3); g3.connect(dryG); o3.start(now); o3.stop(now+0.35);
+
+            // High ethereal shimmer
+            const o4 = actx.createOscillator(), g4 = actx.createGain();
+            o4.type = 'sine'; o4.frequency.setValueAtTime(f*8, now+0.05);
+            o4.frequency.exponentialRampToValueAtTime(f*5, now+0.4);
+            g4.gain.setValueAtTime(0.0, now); g4.gain.linearRampToValueAtTime(0.12, now+0.06);
+            g4.gain.exponentialRampToValueAtTime(0.001, now+1.2);
+            o4.connect(g4); g4.connect(dryG); o4.start(now+0.05); o4.stop(now+1.2);
+        } catch(e){}
+    },
+};
+
+/* ================================================
+   VOLUME CONTROL — mute toggle only
+================================================ */
+function _applyVolume() {
+    const base = isMuted ? 0 : masterVolume;
+    if (SoundEngine._bubblesEl) SoundEngine._bubblesEl.volume = base * 0.04;
+    if (SoundEngine._musicEl)   SoundEngine._musicEl.volume   = base * 0.65;
+    // Update icon
+    const waves = document.getElementById('vol-waves');
+    const icon  = document.getElementById('vol-icon');
+    if (isMuted) {
+        waves.style.display = 'none';
+        if (!icon.querySelector('#vol-x')) {
+            ['9,9,15,15','15,9,9,15'].forEach((pts,i) => {
+                const ln = document.createElementNS('http://www.w3.org/2000/svg','line');
+                const [x1,y1,x2,y2] = pts.split(',');
+                ln.setAttribute('id', i===0?'vol-x':'vol-x2');
+                ln.setAttribute('x1',x1); ln.setAttribute('y1',y1);
+                ln.setAttribute('x2',x2); ln.setAttribute('y2',y2);
+                ln.setAttribute('stroke','rgba(210,190,165,0.70)');
+                ln.setAttribute('stroke-width','1.8');
+                ln.setAttribute('stroke-linecap','round');
+                icon.appendChild(ln);
+            });
+        }
+    } else {
+        waves.style.display = '';
+        ['vol-x','vol-x2'].forEach(id => { const el=icon.querySelector('#'+id); if(el) el.remove(); });
+    }
+}
+
+document.getElementById('vol-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    isMuted = !isMuted;
+    _applyVolume();
+});
+
+function drawCounter(ctx) {
+    if (!showCounter) return;
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,1)';
+    ctx.shadowBlur = 20;
+    ctx.font = "700 3.2rem 'Syncopate', sans-serif";
+    ctx.fillStyle = 'rgba(232,212,184,0.96)';
+    ctx.fillText(score, 22, 72);
+    ctx.font = "400 0.65rem 'Syncopate', sans-serif";
+    ctx.fillStyle = 'rgba(200,180,152,0.75)';
+    ctx.shadowBlur = 12;
+    ctx.fillText('BEST — ' + best, 24, 105);
+    ctx.restore();
+}
+let canvas, ctx, W, H;
+
+function resize() {
+    // Use screen dimensions as fallback — most reliable on mobile WebViews
+    W = window.innerWidth  || document.documentElement.clientWidth  || screen.width;
+    H = window.innerHeight || document.documentElement.clientHeight || screen.height;
+    canvas.width  = W;
+    canvas.height = H;
+    Vents.init(W, H);
+    bakeMenuScene(W, H);
+    if (gs === GS.MENU || gs === GS.END) {
+        sceneBitmap = menuBitmap;
+    } else if (gs === GS.PLAY || gs === GS.DYING) {
+        bakeScene(W, H);
+    }
+}
+
+function loop() {
+    requestAnimationFrame(loop);
+    // Always fill solid black first — prevents any corner/seam artifacts
+    ctx.fillStyle = '#0a0908';
+    ctx.fillRect(0, 0, W, H);
+
+    if (sceneBitmap) ctx.drawImage(sceneBitmap, 0, 0, W, H);
+    else {
+        const g=ctx.createLinearGradient(0,0,0,H);
+        g.addColorStop(0,'#1e1c1a'); g.addColorStop(1,'#242220');
+        ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+        ctx.fillStyle=C.ground; ctx.fillRect(0,H*.82,W,H*.18);
+    }
+
+    Vents.update();
+    Vents.draw(ctx);
+
+    if (gs===GS.PLAY)  updateBubbles(W, H);
+    if (gs===GS.DYING) updateDying();
+    if (gs===GS.MENU)  updateBubbles(W, H);
+
+    bubbles.forEach(b=>drawBubble(ctx,b));
+    if (gs===GS.PLAY || gs===GS.DYING) {
+        Rat.update(W, H);
+        Rat.draw(ctx);
+    }
+    if (gs===GS.PLAY)  { updateParticles(); drawParticles(ctx); }
+    if (gs===GS.DYING) drawDyingFx(ctx);
+    drawCounter(ctx);
+}
+
+/* ================================================
+   INIT
+================================================ */
+document.addEventListener('DOMContentLoaded', ()=>{
+    canvas = document.getElementById('main-canvas');
+    ctx    = canvas.getContext('2d');
+
+    // Double rAF — ensures browser has finished layout before we measure dimensions
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+        resize();
+        window.addEventListener('resize', resize);
+
+        bakeMenuScene(W, H);
+        sceneBitmap = menuBitmap;
+        Vents.init(W, H);
+        for (let i=0;i<6;i++) bubbles.push(mkBubble(W, H, true));
+
+        canvas.addEventListener('click', e=>{
+            const r=canvas.getBoundingClientRect();
+            onTap((e.clientX-r.left)*(W/r.width), (e.clientY-r.top)*(H/r.height));
+        });
+        canvas.addEventListener('touchend', e=>{
+            e.preventDefault();
+            const t=e.changedTouches[0], r=canvas.getBoundingClientRect();
+            onTap((t.clientX-r.left)*(W/r.width),(t.clientY-r.top)*(H/r.height));
+        }, {passive:false});
+
+        document.getElementById('start-screen').addEventListener('click', startGame);
+        document.getElementById('end-screen').addEventListener('click', ()=>{ if(gs===GS.END) startGame(); });
+        document.getElementById('exit-btn').addEventListener('click', e=>{ e.stopPropagation(); goHome(); });
+
+        // Start audio on very first interaction — plays through main screen too
+        const _startAudio = () => { SoundEngine.resume(); };
+        document.getElementById('start-screen').addEventListener('click', _startAudio, {once:true});
+        canvas.addEventListener('touchend', _startAudio, {once:true});
+        canvas.addEventListener('click', _startAudio, {once:true});
+
+        // Stop audio when user leaves or closes the page
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                if (SoundEngine._bubblesEl) SoundEngine._bubblesEl.pause();
+                if (SoundEngine._musicEl)   SoundEngine._musicEl.pause();
+            } else {
+                if (!isMuted) {
+                    if (SoundEngine._bubblesEl) SoundEngine._bubblesEl.play().catch(()=>{});
+                    if (SoundEngine._musicEl)   SoundEngine._musicEl.play().catch(()=>{});
+                }
+            }
+        });
+        window.addEventListener('pagehide', () => {
+            if (SoundEngine._bubblesEl) SoundEngine._bubblesEl.pause();
+            if (SoundEngine._musicEl)   SoundEngine._musicEl.pause();
+        });
+        window.addEventListener('beforeunload', () => {
+            if (SoundEngine._bubblesEl) SoundEngine._bubblesEl.pause();
+            if (SoundEngine._musicEl)   SoundEngine._musicEl.pause();
+        });
+
+        // counter drawn on canvas
+        loop();
+    }));
+});
+</script>
+</body>
+</html>

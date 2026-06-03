@@ -1,0 +1,1428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+<title>Raindrops — A moment in time</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100%;overflow:hidden;}
+body{background:#1a2035;display:flex;flex-direction:column;align-items:center;justify-content:center;
+min-height:100vh;min-height:100dvh;font-family:'Helvetica Neue',-apple-system,sans-serif;
+user-select:none;-webkit-user-select:none;touch-action:none;overflow:hidden;}
+canvas{border-radius:12px;cursor:pointer;touch-action:none;box-shadow:0 0 60px rgba(160,170,200,0.06);}
+/* Glow toggle button (lower-right) */
+#glowToggle{
+  position:fixed;
+  left:0;
+  top:0;
+  width:54px;
+  height:54px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:2px;
+  border:none;
+  background:rgba(0,0,0,0.0);
+  padding:0;
+  margin:0;
+  z-index:9999;
+  cursor:pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+#glowToggle .glowToggleIcon{
+  width:24px;
+  height:34px;
+  display:block;
+}
+#glowToggle svg{
+  width:100%;
+  height:100%;
+  filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.7));
+}
+#glowToggleLabel{
+  font-family:'Helvetica Neue',-apple-system,sans-serif;
+  font-size:10px;
+  letter-spacing:1.2px;
+  color:rgba(255,255,255,0.7);
+}
+#glowToggle.off svg{
+  filter: drop-shadow(0 0 0 rgba(255,255,255,0));
+  opacity:0.35;
+}
+#glowToggle.off #glowToggleLabel{
+  color:rgba(255,255,255,0.35);
+}
+
+</style>
+</head>
+<body>
+<canvas id="g"></canvas>
+<button id="glowToggle" type="button" aria-label="Toggle glowing drops"><span class="glowToggleIcon"><svg viewBox="0 0 30 42" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M15 0 C15 0 0 20 0 28 C0 36 7 42 15 42 C23 42 30 36 30 28 C30 20 15 0 15 0 Z" fill="white"/></svg></span><span id="glowToggleLabel" class="glowToggleLabel">ON</span></button>
+
+<script>
+// === CONFIG ===
+const DROPS_TO_WIN = 20;
+const RAIN_INT = 20;
+const GLOW_MIN_GAP = 1000;
+const GLOW_MAX_GAP = 2000;
+const HIT_R = 45;
+const DENSE = 16;
+const GLOW_MARGIN = 0.15;
+const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+const QUOTES = [
+  "breathe",
+  "May your worries be as short lived as a fart on a windy day. — BH",
+  "feel",
+  "listen",
+  "notice",
+  "pause",
+  "reflect",
+  "release",
+];
+let quoteIndex = 0;
+
+
+let glowEnabled = true;
+// === AUDIO ===
+let actx=null, started=false;
+let noirBuffer=null, rainPlaying=false;
+// Two independent gain nodes — players run offset by half the track duration
+let gainA=null, gainB=null;
+let srcA=null, srcB=null;
+let timerA=null, timerB=null;
+const XFADE=7.0; // crossfade duration in seconds
+
+function stopLoops(){
+  [timerA,timerB].forEach(t=>{if(t)clearTimeout(t);});
+  timerA=null;timerB=null;
+  [srcA,srcB].forEach(s=>{if(s){try{s.stop();}catch(e){}}});
+  srcA=null;srcB=null;
+  stopFire();
+}
+
+// Schedule one player iteration with slight random speed variation
+function schedulePlayer(gainNode, offsetIntoTrack, onReschedule){
+  if(!actx||!noirBuffer||!gainNode)return null;
+  const dur=noirBuffer.duration;
+  const rate=0.97+Math.random()*0.06; // 0.97–1.03x speed, barely perceptible
+  const effectiveDur=dur/rate;
+  const src=actx.createBufferSource();
+  src.buffer=noirBuffer;
+  src.playbackRate.value=rate;
+  const g=actx.createGain();
+  const now=actx.currentTime;
+  // Fade in, hold, fade out
+  g.gain.setValueAtTime(0,now);
+  g.gain.linearRampToValueAtTime(1,now+XFADE);
+  g.gain.setValueAtTime(1,now+effectiveDur-XFADE);
+  g.gain.linearRampToValueAtTime(0,now+effectiveDur);
+  src.connect(g);g.connect(gainNode);
+  src.start(now, offsetIntoTrack % dur);
+  src.stop(now+effectiveDur);
+  // Reschedule slightly before fade-out begins so next iteration overlaps
+  const delay=Math.max(100,(effectiveDur-XFADE)*1000);
+  const timer=setTimeout(()=>{
+    const newOffset=Math.random()*dur*0.4; // random start point next time
+    onReschedule(newOffset);
+  }, delay);
+  return{src,timer};
+}
+
+function startLoops(){
+  if(!actx||!noirBuffer)return;
+  const dur=noirBuffer.duration;
+  // Player A starts from beginning, Player B starts offset by ~half duration
+  const stateA=schedulePlayer(gainA, 0, (off)=>{
+    if(srcA){try{srcA.stop();}catch(e){}}
+    const s=schedulePlayer(gainA, off, arguments.callee);
+    if(s){srcA=s.src;timerA=s.timer;}
+  });
+  const stateB=schedulePlayer(gainB, dur*0.5, (off)=>{
+    if(srcB){try{srcB.stop();}catch(e){}}
+    const s=schedulePlayer(gainB, off, arguments.callee);
+    if(s){srcB=s.src;timerB=s.timer;}
+  });
+  if(stateA){srcA=stateA.src;timerA=stateA.timer;}
+  if(stateB){srcB=stateB.src;timerB=stateB.timer;}
+}
+
+// === FIRE CRACKLE (synthesized) ===
+let fireNode=null, fireGainNode=null;
+function startFire(){
+  if(!actx||fireNode)return;
+  const sr=actx.sampleRate;
+  const len=sr*4;
+  const buf=actx.createBuffer(2,len,sr);
+  for(let ch=0;ch<2;ch++){
+    const d=buf.getChannelData(ch);
+    for(let i=0;i<len;i++){
+      if(Math.random()>0.9985){
+        const popLen=Math.floor(sr*(0.01+Math.random()*0.04));
+        for(let j=0;j<popLen&&i+j<len;j++){
+          d[i+j]+=(Math.random()*2-1)*Math.exp(-j/(popLen*0.3))*0.6;
+        }
+      }
+      d[i]+=(Math.random()*2-1)*0.008;
+    }
+  }
+  const src=actx.createBufferSource();
+  src.buffer=buf;src.loop=true;
+  const bp=actx.createBiquadFilter();bp.type="bandpass";bp.frequency.value=350;bp.Q.value=0.6;
+  const hp=actx.createBiquadFilter();hp.type="highpass";hp.frequency.value=120;
+  fireGainNode=actx.createGain();fireGainNode.gain.value=0.0;
+  src.connect(bp);bp.connect(hp);hp.connect(fireGainNode);
+  fireGainNode.connect(actx.destination);
+  src.start();fireNode=src;
+}
+function stopFire(){
+  if(fireNode){try{fireNode.stop();}catch(e){}fireNode=null;}
+}
+
+
+function initAudio(){
+  if(started)return;
+  try{
+    actx=new(window.AudioContext||window.webkitAudioContext)();
+    // Each player at half volume — together they sum to full
+    gainA=actx.createGain();gainA.gain.value=IS_MOBILE?0.35:0.28;gainA.connect(actx.destination);
+    gainB=actx.createGain();gainB.gain.value=IS_MOBILE?0.35:0.28;gainB.connect(actx.destination);
+    started=true;
+    fetch("audio/rain.mp3")
+      .then(r=>{if(!r.ok)throw new Error();return r.arrayBuffer();})
+      .then(ab=>actx.decodeAudioData(ab))
+      .then(buf=>{noirBuffer=buf;if(rainPlaying){startLoops();startFire();}})
+      .catch(()=>{console.log("Audio load failed");});
+  }catch(e){}
+}
+
+// Bell / singing bowl sound
+function chime(){
+  if(!actx)return;
+  const notes=[523.2,659.2,784,1046.5,1318.5];
+  const f=notes[Math.floor(Math.random()*notes.length)];
+  // Bell: sine with slow decay
+  const o=actx.createOscillator(),g=actx.createGain();
+  o.type="sine";o.frequency.value=f;
+  g.gain.setValueAtTime(0.09,actx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.01,actx.currentTime+0.8);
+  g.gain.exponentialRampToValueAtTime(0.001,actx.currentTime+1.8);
+  o.connect(g);g.connect(actx.destination);o.start();o.stop(actx.currentTime+1.8);
+  // Metallic overtone
+  const o2=actx.createOscillator(),g2=actx.createGain();
+  o2.type="sine";o2.frequency.value=f*2.76; // inharmonic for bell character
+  g2.gain.setValueAtTime(0.02,actx.currentTime);
+  g2.gain.exponentialRampToValueAtTime(0.001,actx.currentTime+0.6);
+  o2.connect(g2);g2.connect(actx.destination);o2.start();o2.stop(actx.currentTime+0.6);
+  // Sub tone
+  const o3=actx.createOscillator(),g3=actx.createGain();
+  o3.type="sine";o3.frequency.value=f*0.5;
+  g3.gain.setValueAtTime(0.025,actx.currentTime);
+  g3.gain.exponentialRampToValueAtTime(0.001,actx.currentTime+1.2);
+  o3.connect(g3);g3.connect(actx.destination);o3.start();o3.stop(actx.currentTime+1.2);
+}
+
+function playEnd(){
+  if(!actx)return;
+  [gainA,gainB].forEach(g=>{if(g){g.gain.cancelScheduledValues(actx.currentTime);g.gain.linearRampToValueAtTime(0.04,actx.currentTime+5);}});
+  if(fireGainNode){fireGainNode.gain.cancelScheduledValues(actx.currentTime);fireGainNode.gain.linearRampToValueAtTime(0,actx.currentTime+5);}
+  [261.6,329.6,392,523.2].forEach((f,i)=>{
+    const o=actx.createOscillator(),g=actx.createGain();
+    o.type="sine";o.frequency.value=f;
+    g.gain.setValueAtTime(0,actx.currentTime+i*0.35);
+    g.gain.linearRampToValueAtTime(0.025,actx.currentTime+i*0.35+0.7);
+    g.gain.exponentialRampToValueAtTime(0.001,actx.currentTime+i*0.35+4.5);
+    o.connect(g);g.connect(actx.destination);o.start(actx.currentTime+i*0.35);o.stop(actx.currentTime+i*0.35+4.5);
+  });
+}
+
+function resetRain(){
+  stopLoops();rainPlaying=true;
+  if(noirBuffer&&actx){
+    [gainA,gainB].forEach(g=>{if(g){g.gain.cancelScheduledValues(actx.currentTime);g.gain.linearRampToValueAtTime(IS_MOBILE?0.35:0.28,actx.currentTime+1);}});
+    startLoops();startFire();
+  }
+}
+
+// === CANVAS (larger like forest) ===
+const cv=document.getElementById("g"),c=cv.getContext("2d");
+
+function positionGlowToggle(){
+  if(!glowToggleBtn) return;
+  const r = cv.getBoundingClientRect();
+  const pad = 14;
+  const size = glowToggleBtn.offsetWidth || 54;
+  glowToggleBtn.style.left = (r.right - size - pad) + "px";
+  glowToggleBtn.style.top  = (r.bottom - size - pad) + "px";
+}
+window.addEventListener("resize", () => setTimeout(positionGlowToggle, 0));
+window.addEventListener("orientationchange", () => setTimeout(positionGlowToggle, 60));
+
+// === GLOW TOGGLE UI ===
+const glowToggleBtn = document.getElementById('glowToggle');
+const glowToggleLabel = document.getElementById('glowToggleLabel');
+function setGlowEnabled(on){
+  glowEnabled = !!on;
+  if(!glowEnabled){
+    if (typeof gs !== 'undefined' && gs) gs.nextGlow = Infinity;
+    // fade out any existing glowing drops smoothly
+    if (typeof gs !== 'undefined' && gs && gs.drops){
+      for(const d of gs.drops){
+        if(d && d.isGlowing && !d.caught){ d.grounded = true; }
+      }
+    }
+  } else {
+    if (typeof scheduleGlow === 'function') scheduleGlow();
+  }
+  if(glowToggleBtn){
+    glowToggleBtn.classList.toggle('off', !glowEnabled);
+  }
+  if(glowToggleLabel){
+    glowToggleLabel.textContent = glowEnabled ? 'ON' : 'OFF';
+  }
+}
+if(glowToggleBtn){
+  glowToggleBtn.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    setGlowEnabled(!glowEnabled);
+    // init audio on first interaction (mobile)
+    if(typeof initAudio === 'function'){ initAudio(); }
+    // start rain loop on first interaction
+    if(typeof rainPlaying !== 'undefined' && !rainPlaying){
+      rainPlaying = true;
+      if(typeof rainBuffer !== 'undefined' && typeof rainGain !== 'undefined' && rainBuffer && rainGain){
+        if(typeof startCrossfadeLoop === 'function') startCrossfadeLoop();
+      }
+    }
+  }, { passive:false });
+}
+
+function getSize(){const W=window.innerWidth,H=window.innerHeight||document.documentElement.clientHeight;const IS_MOB=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent);if(IS_MOB){return{w:Math.floor(W),h:Math.floor(H)};}const mw=Math.min(W*0.98,800),mh=H*0.92;let w=mw,h=mw*(4/3);if(h>mh){h=mh;w=h*(3/4);}return{w:Math.floor(w),h:Math.floor(h)};}
+function resize(){
+  const{w,h}=getSize();
+  cv.width=w*2;cv.height=h*2;cv.style.width=w+"px";cv.style.height=h+"px";
+  c.setTransform(2,0,0,2,0,0);
+  // Clear cached assets so they rebuild at the new canvas size
+  mountains=null;forestData=null;bushData=null;
+  rocksData=null;shadowsData=null;grassData=null;
+}
+window.addEventListener("resize",resize);
+
+// === MOUNTAINS (original simple style) ===
+function buildMountains(w,h){
+  const layers=[];
+
+  // Far range
+  const far=[];
+  let fx=0;
+  while(fx<w+60){
+    const pw=60+Math.random()*100;
+    const ph=h*0.15+Math.random()*h*0.15;
+    far.push({x:fx,w:pw,h:ph});
+    fx+=pw*0.6;
+  }
+  layers.push({peaks:far,color:"rgba(45,50,70,0.6)",y:h*0.45});
+
+  // Mid range
+  const mid=[];
+  let mx=0;
+  while(mx<w+80){
+    const pw=80+Math.random()*120;
+    const ph=h*0.2+Math.random()*h*0.2;
+    mid.push({x:mx,w:pw,h:ph});
+    mx+=pw*0.55;
+  }
+  layers.push({peaks:mid,color:"rgba(30,35,50,0.8)",y:h*0.52});
+
+  // Near range — tallest, darkest
+  const near=[];
+  let nx=-30;
+  while(nx<w+100){
+    const pw=100+Math.random()*140;
+    const ph=h*0.3+Math.random()*h*0.25;
+    near.push({x:nx,w:pw,h:ph});
+    nx+=pw*0.5;
+  }
+  layers.push({peaks:near,color:"rgba(18,20,30,0.92)",y:h*0.58});
+
+  return layers;
+}
+let mountains=null;
+
+function drawMountains(w,h,t){
+  if(!mountains)mountains=buildMountains(w,h);
+
+  mountains.forEach(layer=>{
+    layer.peaks.forEach(pk=>{
+      c.fillStyle=layer.color;
+      c.beginPath();
+      c.moveTo(pk.x,layer.y);
+      // Left slope
+      c.lineTo(pk.x+pk.w*0.4,layer.y-pk.h*0.7);
+      // Peak
+      c.lineTo(pk.x+pk.w*0.5,layer.y-pk.h);
+      // Right slope
+      c.lineTo(pk.x+pk.w*0.65,layer.y-pk.h*0.6);
+      c.lineTo(pk.x+pk.w,layer.y);
+      c.closePath();
+      c.fill();
+
+      // Snow cap on taller peaks
+      if(pk.h>h*0.25){
+        c.fillStyle="rgba(180,190,210,0.15)";
+        c.beginPath();
+        c.moveTo(pk.x+pk.w*0.42,layer.y-pk.h*0.8);
+        c.lineTo(pk.x+pk.w*0.5,layer.y-pk.h);
+        c.lineTo(pk.x+pk.w*0.58,layer.y-pk.h*0.82);
+        c.closePath();
+        c.fill();
+      }
+    });
+  });
+}
+
+// === MOON ===
+function drawMoon(w,h,t){
+  const mx = w*0.12; // upper left
+  const my = h*0.10;
+  const mr = 22;
+  
+  // Outer glow
+  const glow = c.createRadialGradient(mx,my,mr*0.5,mx,my,mr*3);
+  glow.addColorStop(0,"rgba(220,225,235,0.15)");
+  glow.addColorStop(0.5,"rgba(200,210,225,0.05)");
+  glow.addColorStop(1,"rgba(180,190,210,0)");
+  c.fillStyle=glow;
+  c.beginPath();
+  c.arc(mx,my,mr*3,0,Math.PI*2);
+  c.fill();
+  
+  // Moon body
+  const moonGrad = c.createRadialGradient(mx-3,my-3,0,mx,my,mr);
+  moonGrad.addColorStop(0,"rgba(245,245,250,0.95)");
+  moonGrad.addColorStop(0.7,"rgba(220,225,235,0.9)");
+  moonGrad.addColorStop(1,"rgba(200,205,220,0.85)");
+  c.fillStyle=moonGrad;
+  c.beginPath();
+  c.arc(mx,my,mr,0,Math.PI*2);
+  c.fill();
+  
+  // Subtle craters (smaller)
+  c.fillStyle="rgba(180,185,200,0.2)";
+  c.beginPath();c.arc(mx-5,my-3,3,0,Math.PI*2);c.fill();
+  c.beginPath();c.arc(mx+6,my+5,3,0,Math.PI*2);c.fill();
+  c.beginPath();c.arc(mx+2,my-6,2,0,Math.PI*2);c.fill();
+}
+
+// === LAKE ===
+let bushData = null;
+let forestData = null;
+
+function buildBushes(w,h){
+  const bushes = [];
+  // Bushes at the LEFT end of lake (on the shore, not the water)
+  for(let i=0;i<8;i++){
+    bushes.push({
+      x: w*0.01 + Math.random()*w*0.06,
+      y: h*0.75 + Math.random()*h*0.12,
+      size: 8 + Math.random()*12,
+      layers: 2 + Math.floor(Math.random()*2)
+    });
+  }
+  // Bushes at the RIGHT end of lake (on the shore near cabin)
+  for(let i=0;i<8;i++){
+    bushes.push({
+      x: w*0.88 + Math.random()*w*0.10,
+      y: h*0.74 + Math.random()*h*0.10,
+      size: 7 + Math.random()*10,
+      layers: 2 + Math.floor(Math.random()*2)
+    });
+  }
+  // Bottom LEFT corner bushes
+  for(let i=0;i<10;i++){
+    bushes.push({
+      x: w*0.0 + Math.random()*w*0.12,
+      y: h*0.88 + Math.random()*h*0.12,
+      size: 10 + Math.random()*14,
+      layers: 2 + Math.floor(Math.random()*2)
+    });
+  }
+  // Bottom RIGHT corner bushes
+  for(let i=0;i<10;i++){
+    bushes.push({
+      x: w*0.88 + Math.random()*w*0.12,
+      y: h*0.88 + Math.random()*h*0.12,
+      size: 10 + Math.random()*14,
+      layers: 2 + Math.floor(Math.random()*2)
+    });
+  }
+  return bushes;
+}
+
+// Dense forest trees like forest scene - FULL WIDTH
+function buildForest(w,h){
+  const trees = [];
+  // Dense tree line across the ENTIRE width
+  for(let i=0;i<50;i++){
+    trees.push({
+      x: Math.random()*w,
+      baseY: h*0.50 + Math.random()*h*0.18,
+      height: 35 + Math.random()*55,
+      width: 18 + Math.random()*22,
+      layers: 3 + Math.floor(Math.random()*2),
+      darkness: 0.85 + Math.random()*0.15
+    });
+  }
+  // Extra trees to fill gaps
+  for(let i=0;i<30;i++){
+    trees.push({
+      x: Math.random()*w,
+      baseY: h*0.52 + Math.random()*h*0.15,
+      height: 25 + Math.random()*45,
+      width: 14 + Math.random()*18,
+      layers: 2 + Math.floor(Math.random()*2),
+      darkness: 0.80 + Math.random()*0.2
+    });
+  }
+  // Sort by Y so farther trees draw first
+  trees.sort((a,b)=>a.baseY - b.baseY);
+  return trees;
+}
+
+function drawForest(w,h){
+  if(!forestData) forestData = buildForest(w,h);
+  
+  forestData.forEach(tree=>{
+    const tx = tree.x;
+    const ty = tree.baseY;
+    const th = tree.height;
+    const tw = tree.width;
+    
+    // Tree trunk (subtle, mostly hidden)
+    c.fillStyle=`rgba(8,6,5,${tree.darkness})`;
+    c.fillRect(tx-2, ty-th*0.3, 4, th*0.3);
+    
+    // Layered pine tree shape
+    for(let l=0;l<tree.layers;l++){
+      const layerY = ty - th*0.2 - l*(th*0.25);
+      const layerW = tw * (1 - l*0.2);
+      const layerH = th*0.35;
+      
+      // Much darker pine green
+      const greenVal = 12 + l*2;
+      c.fillStyle=`rgba(${4+l},${greenVal},${6+l},${tree.darkness})`;
+      c.beginPath();
+      c.moveTo(tx, layerY - layerH);
+      c.lineTo(tx - layerW/2, layerY);
+      c.lineTo(tx + layerW/2, layerY);
+      c.closePath();
+      c.fill();
+    }
+    
+    // Top point
+    c.fillStyle=`rgba(3,10,5,${tree.darkness})`;
+    c.beginPath();
+    c.moveTo(tx, ty - th);
+    c.lineTo(tx - tw*0.15, ty - th*0.75);
+    c.lineTo(tx + tw*0.15, ty - th*0.75);
+    c.closePath();
+    c.fill();
+  });
+}
+
+// Grass removed
+let grassData = null;
+function buildGrass(w,h){
+  return []; // No grass
+}
+
+function drawGrass(w,h,t){
+  // No grass to draw
+}
+
+// Rocks in the forest/dirt area
+let rocksData = null;
+let shadowsData = null;
+// Initial resize — called here so all cached vars are already declared
+resize();
+positionGlowToggle();
+
+function buildShadows(w,h){
+  const shadows = [];
+  const dirtY = h*0.48;
+  const dirtH = h*0.22;
+  
+  // Shadow patches
+  for(let i=0;i<25;i++){
+    shadows.push({
+      x: Math.random()*w,
+      y: dirtY + Math.random()*dirtH,
+      w: 30 + Math.random()*60,
+      h: 10 + Math.random()*20,
+      alpha: 0.3 + Math.random()*0.3,
+      rotation: Math.random()*0.5
+    });
+  }
+  
+  // Small texture spots
+  for(let i=0;i<30;i++){
+    shadows.push({
+      x: Math.random()*w,
+      y: dirtY + Math.random()*dirtH,
+      w: 3 + Math.random()*8,
+      h: (3 + Math.random()*8)*0.6,
+      alpha: 0.5,
+      rotation: Math.random()*Math.PI,
+      isTexture: true,
+      color: {
+        r: 20 + Math.floor(Math.random()*15),
+        g: 16 + Math.floor(Math.random()*12),
+        b: 12 + Math.floor(Math.random()*10)
+      }
+    });
+  }
+  
+  return shadows;
+}
+
+function drawShadows(w,h){
+  shadowsData.forEach(s=>{
+    if(s.isTexture){
+      c.fillStyle=`rgba(${s.color.r},${s.color.g},${s.color.b},${s.alpha})`;
+    } else {
+      c.fillStyle=`rgba(8,6,5,${s.alpha})`;
+    }
+    c.beginPath();
+    c.ellipse(s.x,s.y,s.w,s.h,s.rotation,0,Math.PI*2);
+    c.fill();
+  });
+}
+
+function buildRocks(w,h){
+  const rocks = [];
+  // Scattered rocks in the dirt/forest area
+  for(let i=0;i<45;i++){
+    const size = 8 + Math.random()*20;
+    rocks.push({
+      x: Math.random()*w,
+      y: h*0.50 + Math.random()*h*0.18,
+      w: size,
+      h: size * (0.4 + Math.random()*0.25),
+      points: 5 + Math.floor(Math.random()*4), // for irregular shape
+      color: {
+        r: 18 + Math.floor(Math.random()*12),
+        g: 16 + Math.floor(Math.random()*10),
+        b: 14 + Math.floor(Math.random()*8)
+      },
+      angleOffsets: Array.from({length: 9}, () => (Math.random()-0.5)*0.4)
+    });
+  }
+  // Some larger boulders
+  for(let i=0;i<15;i++){
+    const size = 18 + Math.random()*30;
+    rocks.push({
+      x: Math.random()*w,
+      y: h*0.52 + Math.random()*h*0.15,
+      w: size,
+      h: size * (0.4 + Math.random()*0.2),
+      points: 6 + Math.floor(Math.random()*3),
+      color: {
+        r: 22 + Math.floor(Math.random()*10),
+        g: 18 + Math.floor(Math.random()*8),
+        b: 15 + Math.floor(Math.random()*6)
+      },
+      angleOffsets: Array.from({length: 9}, () => (Math.random()-0.5)*0.5)
+    });
+  }
+  // Sort by Y so farther rocks draw first
+  rocks.sort((a,b)=>a.y - b.y);
+  return rocks;
+}
+
+function drawRocks(w,h){
+  rocksData.forEach(rock=>{
+    // Draw irregular polygon rock shape
+    c.fillStyle=`rgba(${rock.color.r},${rock.color.g},${rock.color.b},0.95)`;
+    c.beginPath();
+    for(let i=0;i<rock.points;i++){
+      const angle = (i/rock.points)*Math.PI*2 + rock.angleOffsets[i];
+      const radiusX = rock.w/2 * (0.7 + rock.angleOffsets[i]*0.5);
+      const radiusY = rock.h/2 * (0.7 + rock.angleOffsets[(i+1)%rock.points]*0.5);
+      const px = rock.x + Math.cos(angle)*radiusX;
+      const py = rock.y + Math.sin(angle)*radiusY;
+      if(i===0) c.moveTo(px, py);
+      else c.lineTo(px, py);
+    }
+    c.closePath();
+    c.fill();
+    
+    // Darker bottom/shadow
+    c.fillStyle=`rgba(${rock.color.r-8},${rock.color.g-6},${rock.color.b-5},0.6)`;
+    c.beginPath();
+    c.ellipse(rock.x, rock.y + rock.h*0.25, rock.w/2.5, rock.h/4, 0, 0, Math.PI);
+    c.fill();
+    
+    // Subtle top highlight
+    c.fillStyle=`rgba(${rock.color.r+12},${rock.color.g+10},${rock.color.b+8},0.2)`;
+    c.beginPath();
+    c.ellipse(rock.x - rock.w*0.1, rock.y - rock.h*0.1, rock.w/4, rock.h/5, -0.3, 0, Math.PI*2);
+    c.fill();
+  });
+}
+
+function drawLake(w,h,t){
+  const lakeY = h*0.73;
+  const groundY = h*0.68;
+  
+  // Dark charcoal ground/shore around the lake
+  c.fillStyle="rgba(18,18,18,1)";
+  c.fillRect(0,groundY,w,h-groundY);
+  
+  // Lake base - darker color, extends to bottom
+  const lakeGrad = c.createLinearGradient(0,lakeY,0,h);
+  lakeGrad.addColorStop(0,"rgba(4,12,18,0.97)");
+  lakeGrad.addColorStop(0.3,"rgba(5,14,20,0.98)");
+  lakeGrad.addColorStop(0.7,"rgba(3,10,16,1)");
+  lakeGrad.addColorStop(1,"rgba(2,8,12,1)");
+  c.fillStyle=lakeGrad;
+  
+  // Draw oval lake shape
+  c.beginPath();
+  const lakeCenterX = w * 0.5;
+  const lakeCenterY = h * 0.85;
+  const lakeRadiusX = w * 0.42;
+  const lakeRadiusY = h * 0.18;
+  c.ellipse(lakeCenterX, lakeCenterY, lakeRadiusX, lakeRadiusY, 0, 0, Math.PI * 2);
+  c.fill();
+  
+  // Gentle ripples across the lake
+  c.save();
+  for(let i=0;i<6;i++){
+    const rippleY = lakeCenterY - lakeRadiusY*0.5 + i*12;
+    const ripplePhase = t*0.001 + i*0.5;
+    const rippleAmp = 2 + Math.sin(ripplePhase*0.7)*1.5;
+    
+    c.strokeStyle=`rgba(60,80,100,${0.08-i*0.01})`;
+    c.lineWidth = 1;
+    c.beginPath();
+    
+    // Draw wavy ripple line within oval bounds
+    const rippleWidth = lakeRadiusX * (1 - Math.abs(i-2.5)/4);
+    for(let x=lakeCenterX - rippleWidth; x<lakeCenterX + rippleWidth; x+=5){
+      const waveY = rippleY + Math.sin(x*0.02 + ripplePhase)*rippleAmp;
+      if(x===lakeCenterX - rippleWidth) c.moveTo(x, waveY);
+      else c.lineTo(x, waveY);
+    }
+    c.stroke();
+  }
+  c.restore();
+  
+  // Moon reflection - left side of the lake
+  const moonRefX = w*0.30;
+  const moonRefY = lakeCenterY - lakeRadiusY*0.3;
+  
+  // Main moon glow on water - smaller to match smaller moon
+  c.save();
+  const moonGlow = c.createRadialGradient(moonRefX,moonRefY,0,moonRefX,moonRefY,45);
+  moonGlow.addColorStop(0,"rgba(200,210,230,0.35)");
+  moonGlow.addColorStop(0.4,"rgba(160,175,200,0.15)");
+  moonGlow.addColorStop(1,"rgba(120,140,170,0)");
+  c.fillStyle=moonGlow;
+  c.beginPath();
+  c.ellipse(moonRefX,moonRefY,38,16,0,0,Math.PI*2);
+  c.fill();
+  
+  // Bright center reflection
+  c.fillStyle="rgba(220,230,245,0.3)";
+  c.beginPath();
+  c.ellipse(moonRefX,moonRefY,16,7,0,0,Math.PI*2);
+  c.fill();
+  
+  // Shimmering reflection lines (moving)
+  for(let i=0;i<6;i++){
+    const shimmerY = moonRefY - 12 + i*8;
+    const shimmerPhase = t*0.002 + i*0.8;
+    const shimmerX = moonRefX + Math.sin(shimmerPhase)*5;
+    const shimmerW = 15 - Math.abs(i-2.5)*3;
+    const shimmerAlpha = 0.35 - Math.abs(i-2.5)*0.06;
+    
+    c.fillStyle=`rgba(210,225,245,${shimmerAlpha})`;
+    c.beginPath();
+    c.ellipse(shimmerX, shimmerY, shimmerW, 2, 0, 0, Math.PI*2);
+    c.fill();
+  }
+  c.restore();
+  
+  // Draw bushes around the lake
+  if(!bushData) bushData = buildBushes(w,h);
+  
+  bushData.forEach(bush=>{
+    // Draw layered bush circles for organic look - very dark, almost black green
+    for(let l=0;l<bush.layers;l++){
+      const offsetX = (l-bush.layers/2)*bush.size*0.4;
+      const offsetY = l*2;
+      const s = bush.size - l*2;
+      
+      // Almost black green bush color
+      c.fillStyle=`rgba(3,8,5,${0.98-l*0.05})`;
+      c.beginPath();
+      c.arc(bush.x+offsetX, bush.y+offsetY, s, 0, Math.PI*2);
+      c.fill();
+      
+      // Very subtle lighter highlight on top
+      c.fillStyle=`rgba(8,15,10,${0.2-l*0.05})`;
+      c.beginPath();
+      c.arc(bush.x+offsetX, bush.y+offsetY-s*0.3, s*0.5, 0, Math.PI*2);
+      c.fill();
+    }
+  });
+}
+
+// === MIST/CLOUDS ===
+function drawMist(w,h,t){
+  const mistY = h*0.10; // Higher, near top of mountains
+  
+  // Thin wispy mist layers - more transparent, gently drifting
+  for(let i=0;i<4;i++){
+    const driftSpeed = 0.0001 + i*0.00005;
+    const fogX = Math.sin(t*driftSpeed+i*2)*60 + Math.cos(t*driftSpeed*0.7+i)*30;
+    const fogY = mistY + i*12;
+    c.save();
+    c.globalAlpha=0.06-i*0.01; // More transparent
+    
+    // Smaller, wispier clouds
+    c.fillStyle="rgba(180,190,205,0.5)";
+    c.beginPath();
+    c.ellipse(w*0.3+fogX, fogY, w*0.2, 8+i*3, 0, 0, Math.PI*2);
+    c.fill();
+    
+    c.beginPath();
+    c.ellipse(w*0.6-fogX*0.6, fogY+5, w*0.15, 6+i*2, 0, 0, Math.PI*2);
+    c.fill();
+    
+    c.beginPath();
+    c.ellipse(w*0.8+fogX*0.4, fogY+3, w*0.12, 5+i*2, 0, 0, Math.PI*2);
+    c.fill();
+    c.restore();
+  }
+}
+
+// === CAMPFIRE ===
+let campfireFlicker = 0;
+function drawCampfire(w,h,t){
+  const cx = w*0.50; // centered
+  const cy = h*0.58; // moved up between trees and mountains
+  
+  campfireFlicker += 0.15;
+  const flicker = Math.sin(campfireFlicker)*0.3 + Math.sin(campfireFlicker*1.7)*0.2;
+  
+  // Fire glow on ground
+  const groundGlow = c.createRadialGradient(cx,cy,0,cx,cy,50);
+  groundGlow.addColorStop(0,"rgba(255,150,50,0.15)");
+  groundGlow.addColorStop(0.5,"rgba(255,100,30,0.06)");
+  groundGlow.addColorStop(1,"rgba(255,80,20,0)");
+  c.fillStyle=groundGlow;
+  c.beginPath();
+  c.arc(cx,cy,50,0,Math.PI*2);
+  c.fill();
+  
+  // Cabin silhouette (to the right of fire) - very dark, almost black
+  const cabinX = cx + 30;
+  const cabinY = cy + 5;
+  const cabinW = 45;
+  const cabinH = 32;
+  
+  // Cabin body - almost black
+  c.fillStyle="rgba(8,8,8,0.98)";
+  c.fillRect(cabinX, cabinY-cabinH, cabinW, cabinH);
+  
+  // Cabin roof - darkest
+  c.fillStyle="rgba(5,5,5,0.98)";
+  c.beginPath();
+  c.moveTo(cabinX-6, cabinY-cabinH);
+  c.lineTo(cabinX+cabinW/2, cabinY-cabinH-20);
+  c.lineTo(cabinX+cabinW+6, cabinY-cabinH);
+  c.closePath();
+  c.fill();
+  
+  // Chimney
+  c.fillStyle="rgba(6,6,6,0.98)";
+  c.fillRect(cabinX+cabinW-12, cabinY-cabinH-15, 6, 12);
+  
+  // Door - slightly lighter to show shape
+  c.fillStyle="rgba(12,10,10,0.95)";
+  c.fillRect(cabinX+8, cabinY-18, 10, 18);
+  
+  // Windows with warm glow
+  c.fillStyle="rgba(255,180,80,0.5)";
+  c.fillRect(cabinX+22, cabinY-cabinH+8, 10, 8);
+  c.fillStyle="rgba(255,200,100,0.3)";
+  c.fillRect(cabinX+22, cabinY-cabinH+8, 10, 8);
+  // Window frame
+  c.strokeStyle="rgba(3,3,3,0.9)";
+  c.lineWidth=1;
+  c.strokeRect(cabinX+22, cabinY-cabinH+8, 10, 8);
+  c.beginPath();
+  c.moveTo(cabinX+27, cabinY-cabinH+8);
+  c.lineTo(cabinX+27, cabinY-cabinH+16);
+  c.stroke();
+  
+  // Second smaller window
+  c.fillStyle="rgba(255,160,60,0.4)";
+  c.fillRect(cabinX+cabinW-14, cabinY-cabinH+10, 6, 6);
+  
+  // Fire ring stones
+  c.fillStyle="rgba(30,28,26,0.9)";
+  for(let i=0;i<6;i++){
+    const angle = (i/6)*Math.PI*2;
+    const sx = cx + Math.cos(angle)*10;
+    const sy = cy + 3 + Math.sin(angle)*4;
+    c.beginPath();
+    c.ellipse(sx,sy,3,2.5,0,0,Math.PI*2);
+    c.fill();
+  }
+  
+  // Logs
+  c.fillStyle="rgba(35,28,22,0.9)";
+  c.save();
+  c.translate(cx,cy+2);
+  c.rotate(-0.3);
+  c.fillRect(-10,-2,20,4);
+  c.rotate(0.6);
+  c.fillRect(-10,-2,20,4);
+  c.restore();
+  
+  // Fire flames - smaller, calmer
+  const flames = [
+    {ox:0, h:10+flicker*4, w:3, color:"rgba(255,200,80,"},
+    {ox:-2, h:7+flicker*3, w:2, color:"rgba(255,150,50,"},
+    {ox:2, h:8+flicker*3, w:2.5, color:"rgba(255,120,30,"},
+  ];
+  
+  flames.forEach((f,i)=>{
+    const wob = Math.sin(campfireFlicker+i)*1.5;
+    c.fillStyle=f.color+"0.7)";
+    c.beginPath();
+    c.moveTo(cx+f.ox-f.w+wob, cy);
+    c.quadraticCurveTo(cx+f.ox+wob*0.5, cy-f.h*0.5, cx+f.ox+wob, cy-f.h);
+    c.quadraticCurveTo(cx+f.ox+wob*0.5, cy-f.h*0.5, cx+f.ox+f.w+wob, cy);
+    c.closePath();
+    c.fill();
+  });
+  
+  // Sparks - very occasional, just a few
+  if(Math.random()>0.985){
+    const spark = {
+      x: cx + (Math.random()-0.5)*6,
+      y: cy - 10 - Math.random()*5,
+      vx: (Math.random()-0.5)*0.3,
+      vy: -0.3-Math.random()*0.3,
+    };
+    gs.sparks.push(spark);
+  }
+  
+  // Draw existing sparks
+  for(let i=gs.sparks.length-1;i>=0;i--){
+    const s=gs.sparks[i];
+    s.x+=s.vx;
+    s.y+=s.vy;
+    s.vy+=0.008; // gentler gravity
+    const age = (cy-10-s.y)/30;
+    if(age>1 || s.y>cy){gs.sparks.splice(i,1);continue;}
+    c.fillStyle=`rgba(255,180,80,${0.6-age*0.6})`;
+    c.beginPath();
+    c.arc(s.x,s.y,1,0,Math.PI*2);
+    c.fill();
+  }
+}
+
+// === GAME STATE ===
+const gs={
+  drops:[],catchPs:[],ripples:[],sparks:[],
+  score:0,phase:"menu",
+  lastRain:0,nextGlow:0,
+  cloudOff:0,menuPulse:0,
+  endT:0,endQuote:"",
+  dimAlpha:0,rainFaded:false,rbPs:null,
+  quoteStartTime:0,
+};
+
+function scheduleGlow(){
+  if(!glowEnabled){ gs.nextGlow = Infinity; return; }
+  gs.nextGlow=Date.now()+GLOW_MIN_GAP+Math.random()*(GLOW_MAX_GAP-GLOW_MIN_GAP);
+}
+
+function mkDrop(w,h,forceGlow){
+  const gl=forceGlow||false;
+  const speedScale=h/600;
+  const xPos=gl?w*GLOW_MARGIN+Math.random()*w*(1-2*GLOW_MARGIN):Math.random()*w;
+  return{
+    x:xPos,y:-10-Math.random()*50,
+    speed:gl?(1.2+Math.random()*0.5)*speedScale:(14+Math.random()*10)*speedScale,
+    length:gl?12+Math.random()*6:2+Math.random()*5,
+    opacity:gl?1:0.28+Math.random()*0.35,
+    isGlowing:gl,pulsePhase:Math.random()*Math.PI*2,
+    width:gl?2.5:0.4+Math.random()*0.6,
+    caught:false,fadeOut:1,
+    drift:gl?0:(Math.random()-0.5)*0.8,
+  };
+}
+
+function mkFx(x,y){
+  const ps=[];
+  for(let i=0;i<14;i++){
+    const a=(Math.PI*2*i)/14+Math.random()*0.3,s=2+Math.random()*3;
+    ps.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-1.5,life:1,size:1.5+Math.random()*3,
+      color:Math.random()>0.5?"rgba(200,210,240,":"rgba(170,185,220,"});
+  }
+  return ps;
+}
+
+function mkRip(x,y){return{x,y,radius:3,opacity:0.45,speed:1};}
+
+// === INPUT ===
+function getPos(e){
+  const r=cv.getBoundingClientRect();
+  const sx=(cv.width/2)/r.width,sy=(cv.height/2)/r.height;
+  const px=e.touches?e.touches[0].clientX:e.clientX;
+  const py=e.touches?e.touches[0].clientY:e.clientY;
+  return{x:(px-r.left)*sx,y:(py-r.top)*sy};
+}
+
+function tap(e){
+  e.preventDefault();initAudio();
+
+  if(!rainPlaying){
+    rainPlaying=true;
+    if(noirBuffer){startLoops();startFire();}
+  }
+
+  if(gs.phase==="menu"){
+    gs.phase="playing";gs.score=0;
+    gs.drops=[];gs.catchPs=[];gs.ripples=[];gs.sparks=[];
+    gs.endT=0;gs.dimAlpha=0;gs.rainFaded=false;gs.rbPs=null;
+    if (typeof scheduleGlow === 'function') scheduleGlow();resetRain();return;
+  }
+
+  if(gs.phase==="quote"){
+    const rect=cv.getBoundingClientRect();
+    const cw=rect.width,ch=rect.height;
+    const btnW=160,btnH=34,btnY=ch-55;
+    const btn1X=(cw-btnW)/2;
+    const{x,y}=getPos(e);
+    if(x>=btn1X&&x<=btn1X+btnW&&y>=btnY&&y<=btnY+btnH){
+      stopLoops();rainPlaying=false;
+      gs.phase="playing";gs.score=0;
+      gs.drops=[];gs.catchPs=[];gs.ripples=[];gs.sparks=[];
+      gs.endT=0;gs.dimAlpha=0;gs.rainFaded=false;gs.rbPs=null;
+      mountains=null;forestData=null;bushData=null;rocksData=null;shadowsData=null;
+      if (typeof scheduleGlow === 'function') scheduleGlow();resetRain();return;
+    }
+    return;
+  }
+
+  if(gs.phase!=="playing")return;
+
+  const{x,y}=getPos(e);
+  let best=Infinity,bi=-1;
+  for(let i=0;i<gs.drops.length;i++){
+    const d=gs.drops[i];if(!d.isGlowing||d.caught)continue;
+    const dist=Math.hypot(x-d.x,y-d.y);
+    if(dist<HIT_R&&dist<best){best=dist;bi=i;}
+  }
+  if(bi>=0){
+    const d=gs.drops[bi];d.caught=true;gs.score++;
+    gs.catchPs.push(...mkFx(d.x,d.y));
+    gs.ripples.push(mkRip(d.x,d.y));chime();
+    if(gs.score>=DROPS_TO_WIN){
+      gs.phase="ending";gs.endT=0;
+      gs.endQuote=QUOTES[quoteIndex%QUOTES.length];quoteIndex++;
+      playEnd();
+    }
+  } else {
+    gs.ripples.push(mkRip(x,y));
+  }
+}
+
+cv.addEventListener("click",tap);
+cv.addEventListener("touchstart",tap,{passive:false});
+
+// === DRAW DROP ===
+function drawDrop(d){
+  c.save();
+  if(d.isGlowing&&!d.caught){
+    d.pulsePhase+=0.04;const p=0.6+Math.sin(d.pulsePhase)*0.4;
+    // Outer silver-blue glow
+    const og=c.createRadialGradient(d.x,d.y,0,d.x,d.y,26);
+    og.addColorStop(0,`rgba(160,185,240,${0.35*p})`);
+    og.addColorStop(0.35,`rgba(140,165,225,${0.18*p})`);
+    og.addColorStop(0.65,`rgba(120,145,210,${0.08*p})`);
+    og.addColorStop(1,"rgba(100,130,200,0)");
+    c.fillStyle=og;c.beginPath();c.ellipse(d.x,d.y,22,28,0,0,Math.PI*2);c.fill();
+    // Inner glow
+    const ig=c.createRadialGradient(d.x,d.y,0,d.x,d.y,10);
+    ig.addColorStop(0,`rgba(220,230,255,${0.6*p})`);
+    ig.addColorStop(1,`rgba(180,200,245,${0.25*p})`);
+    c.fillStyle=ig;c.beginPath();c.ellipse(d.x,d.y,7,10,0,0,Math.PI*2);c.fill();
+    // Core oval
+    c.fillStyle=`rgba(235,242,255,${0.85*p*d.fadeOut})`;
+    c.beginPath();c.ellipse(d.x,d.y,4,6,0,0,Math.PI*2);c.fill();
+    // Bright center
+    c.fillStyle=`rgba(255,255,255,${0.95*p*d.fadeOut})`;
+    c.beginPath();c.ellipse(d.x,d.y,2,3.5,0,0,Math.PI*2);c.fill();
+  } else {
+    c.strokeStyle=`rgba(140,150,170,${d.opacity*d.fadeOut})`;c.lineWidth=d.width;c.lineCap="round";
+    c.beginPath();c.moveTo(d.x+d.drift*6,d.y-d.length/2);c.lineTo(d.x,d.y+d.length/2);c.stroke();
+  }
+  c.restore();
+}
+
+// === MAIN LOOP ===
+function loop(){
+  const now=Date.now(),{w:cw,h:ch}=getSize();
+  positionGlowToggle();
+
+  // === BG — night sky, slightly brighter for mobile visibility ===
+  const bg=c.createLinearGradient(0,0,0,ch);
+  bg.addColorStop(0,"#1a2035");bg.addColorStop(0.3,"#1e2438");bg.addColorStop(0.6,"#252a42");bg.addColorStop(1,"#2a2e48");
+  c.fillStyle=bg;c.fillRect(0,0,cw,ch);
+
+  const isActive=gs.phase==="menu"||gs.phase==="playing"||gs.phase==="ending"||gs.phase==="quote";
+
+  if(isActive){
+    // Moon (upper left)
+    drawMoon(cw,ch,now);
+    
+    // 5 small static stars
+    c.fillStyle="rgba(220,225,235,0.7)";
+    c.beginPath();c.arc(cw*0.08, ch*0.05, 1.5, 0, Math.PI*2);c.fill();
+    c.beginPath();c.arc(cw*0.45, ch*0.03, 1, 0, Math.PI*2);c.fill();
+    c.beginPath();c.arc(cw*0.72, ch*0.07, 1.5, 0, Math.PI*2);c.fill();
+    c.beginPath();c.arc(cw*0.88, ch*0.04, 1, 0, Math.PI*2);c.fill();
+    c.beginPath();c.arc(cw*0.35, ch*0.09, 1.2, 0, Math.PI*2);c.fill();
+    
+    // Heavy cloud cover
+    gs.cloudOff+=0.06;
+    c.save();c.globalAlpha=0.15;c.fillStyle="rgba(30,32,45,1)";
+    for(let i=0;i<4;i++){
+      const cx2=((gs.cloudOff*(0.15+i*0.12)+i*170)%(cw+350))-175;
+      c.beginPath();c.ellipse(cx2,12+i*11,120+i*25,16+i*6,0,0,Math.PI*2);c.fill();
+    }
+    c.restore();
+
+    // Mountains (above mist)
+    drawMountains(cw,ch,now);
+    
+    // Dark brown dirt/rocks area behind trees
+    const dirtY = ch*0.48;
+    const dirtH = ch*0.22;
+    const dirtGrad = c.createLinearGradient(0,dirtY,0,dirtY+dirtH);
+    dirtGrad.addColorStop(0,"rgba(25,20,15,1)");
+    dirtGrad.addColorStop(0.3,"rgba(30,24,18,1)");
+    dirtGrad.addColorStop(0.7,"rgba(22,18,14,1)");
+    dirtGrad.addColorStop(1,"rgba(18,15,12,1)");
+    c.fillStyle=dirtGrad;
+    c.fillRect(0,dirtY,cw,dirtH);
+    
+    // Add darker shadow patches for depth (pre-generated)
+    if(!shadowsData) shadowsData = buildShadows(cw,ch);
+    drawShadows(cw,ch);
+    
+    // Larger rocks scattered in the dirt/forest area
+    if(!rocksData) rocksData = buildRocks(cw,ch);
+    drawRocks(cw,ch);
+    
+    // Dense forest on right side (behind cabin area)
+    drawForest(cw,ch);
+    
+    // Mist layer (covering lower mountains)
+    drawMist(cw,ch,now);
+    
+    // Lake
+    drawLake(cw,ch,now);
+    
+    // Tall grass at bottom of lake
+    drawGrass(cw,ch,now);
+    
+    // Campfire
+    drawCampfire(cw,ch,now);
+
+    // === RAIN ===
+    const canSpawn=gs.phase==="playing"||gs.phase==="ending";
+    const isMenu=gs.phase==="menu"||gs.phase==="quote";
+
+    if(canSpawn&&now-gs.lastRain>RAIN_INT){
+      for(let i=0;i<DENSE;i++) gs.drops.push(mkDrop(cw,ch,false));
+      gs.lastRain=now;
+    }
+    if(isMenu&&now-gs.lastRain>120){
+      for(let i=0;i<2;i++){const d=mkDrop(cw,ch,false);d.opacity=0.04+Math.random()*0.08;gs.drops.push(d);}
+      gs.lastRain=now;
+    }
+
+    if(gs.phase==="playing"&&glowEnabled&&now>=gs.nextGlow){
+      gs.drops.push(mkDrop(cw,ch,true));
+      if (typeof scheduleGlow === 'function') scheduleGlow();
+    }
+
+    // Remove oldest non-glowing drops if too many, but keep glowing drops
+// Cap (keep glowing drops; only trim regular rain)
+const MAX_REGULAR = 500;
+let regularCount = 0;
+
+for (let i = gs.drops.length - 1; i >= 0; i--) {
+  const d = gs.drops[i];
+
+  if (!d.isGlowing) {
+    regularCount++;
+    if (regularCount > MAX_REGULAR) {
+      gs.drops.splice(i, 1); // only remove regular drops
+    }
+  }
+}
+
+    // Update & draw drops
+  for (let i = gs.drops.length - 1; i >= 0; i--) {
+  const d = gs.drops[i];
+
+  // Move
+  d.y += d.speed;
+  d.x += d.drift;
+
+  // Mark "hit ground" only when it passes the bottom a bit
+if (!d.grounded && (d.y + d.length/2) >= (ch + 2)) {
+  d.grounded = true;
+}
+
+  // If caught, fade out (both types)
+  if (d.caught) {
+    d.fadeOut -= 0.08;
+    if (d.fadeOut <= 0) {
+      gs.drops.splice(i, 1);
+      continue;
+    }
+  }
+
+  // Glowing drops: only fade AFTER hitting the bottom
+  if (d.isGlowing) {
+    if (d.grounded) {
+      d.fadeOut -= 0.04;
+      if (d.fadeOut <= 0) {
+        gs.drops.splice(i, 1);
+        continue;
+      }
+    }
+  } else {
+    // Regular drops: remove once they go offscreen
+    if (d.y > ch + 20) {
+      gs.drops.splice(i, 1);
+      continue;
+    }
+  }
+
+  drawDrop(d);
+}
+
+    // Ripples
+    for(let i=gs.ripples.length-1;i>=0;i--){
+      const r=gs.ripples[i];r.radius+=r.speed;r.opacity-=0.01;
+      if(r.opacity<=0){gs.ripples.splice(i,1);continue;}
+      c.save();c.strokeStyle=`rgba(180,195,220,${r.opacity})`;c.lineWidth=1;
+      c.beginPath();c.arc(r.x,r.y,r.radius,0,Math.PI*2);c.stroke();c.restore();
+    }
+
+    // Catch particles
+    for(let i=gs.catchPs.length-1;i>=0;i--){
+      const p=gs.catchPs[i];p.x+=p.vx;p.y+=p.vy;p.vy+=0.04;p.life-=0.016;
+      if(p.life<=0){gs.catchPs.splice(i,1);continue;}
+      c.save();c.globalAlpha=p.life;c.fillStyle=p.color+p.life+")";
+      c.beginPath();c.arc(p.x,p.y,p.size*p.life,0,Math.PI*2);c.fill();c.restore();
+    }
+  }
+
+  // === PLAYING UI ===
+  if(gs.phase==="playing"){
+    const barW=5,barH=ch*0.6,barX=12,barY=(ch-barH)/2;
+    const prog=Math.min(gs.score/DROPS_TO_WIN,1);
+    c.fillStyle="rgba(255,255,255,0.06)";
+    c.beginPath();c.roundRect(barX,barY,barW,barH,3);c.fill();
+    if(prog>0){
+      const fillH=barH*prog;
+      const fg=c.createLinearGradient(0,barY+barH,0,barY+barH-fillH);
+      fg.addColorStop(0,"rgba(160,180,220,0.4)");fg.addColorStop(1,"rgba(200,215,245,0.7)");
+      c.fillStyle=fg;c.beginPath();c.roundRect(barX,barY+barH-fillH,barW,fillH,3);c.fill();
+      c.shadowColor="rgba(160,180,220,0.35)";c.shadowBlur=6;
+      c.beginPath();c.roundRect(barX,barY+barH-fillH,barW,fillH,3);c.fill();c.shadowBlur=0;
+    }
+    c.fillStyle="rgba(255,255,255,0.65)";c.font="600 13px 'Helvetica Neue',sans-serif";
+    c.textAlign="center";c.fillText(`${gs.score}`,barX+barW/2,barY+barH+18);
+  }
+
+  // === MENU ===
+  if(gs.phase==="menu"){
+    gs.menuPulse+=0.018;
+    const btnW=140,btnH=34,btnX=(cw-btnW)/2,btnY=ch-55;
+    c.fillStyle="rgba(25,30,55,0.85)";
+    c.beginPath();c.roundRect(btnX,btnY,btnW,btnH,17);c.fill();
+    c.fillStyle=`rgba(200,215,245,${0.8+Math.sin(gs.menuPulse)*0.2})`;
+    c.font="600 13px 'Helvetica Neue',sans-serif";
+    c.textAlign="center";c.fillText("tap to begin",cw/2,btnY+btnH/2+4);
+  }
+
+  // === ENDING — DARK MOODY TRANSITION ===
+  if(gs.phase==="ending"){
+    gs.endT+=0.005;
+    const t=Math.min(gs.endT,1);
+
+    if(!gs.rainFaded){
+      if(gainA){gainA.gain.cancelScheduledValues(actx?actx.currentTime:0);gainA.gain.linearRampToValueAtTime(0,actx.currentTime+3);}
+      if(gainB){gainB.gain.cancelScheduledValues(actx?actx.currentTime:0);gainB.gain.linearRampToValueAtTime(0,actx.currentTime+3);}
+      if(fireGainNode){fireGainNode.gain.cancelScheduledValues(actx.currentTime);fireGainNode.gain.linearRampToValueAtTime(0,actx.currentTime+3);}
+      gs.rainFaded=true;
+    }
+
+    const r1=Math.floor(20+(30-20)*t),g1=Math.floor(24+(35-24)*t),b1=Math.floor(40+(55-40)*t);
+    const r2=Math.floor(28+(25-28)*t),g2=Math.floor(31+(28-31)*t),b2=Math.floor(46+(40-46)*t);
+    const tbg=c.createLinearGradient(0,0,0,ch);
+    tbg.addColorStop(0,`rgb(${r1},${g1},${b1})`);tbg.addColorStop(1,`rgb(${r2},${g2},${b2})`);
+    c.fillStyle=tbg;c.fillRect(0,0,cw,ch);
+
+    for(let i=gs.drops.length-1;i>=0;i--){
+      const d=gs.drops[i];d.opacity*=0.88;d.speed*=0.96;
+      if(d.opacity<0.003){gs.drops.splice(i,1);continue;}
+      c.save();c.strokeStyle=`rgba(180,185,200,${d.opacity})`;c.lineWidth=d.width;c.lineCap="round";
+      c.beginPath();c.moveTo(d.x,d.y-d.length/2);c.lineTo(d.x,d.y+d.length/2);c.stroke();c.restore();
+      d.y+=d.speed;
+    }
+
+    if(t>0.3){
+      if(!gs.rbPs||gs.rbPs.length===0){
+        gs.rbPs=[];
+        const cols=["#93c5fd","#60a5fa","#bfdbfe","#e0f2fe","#c7d2fe","#a5b4fc","#ddd6fe"];
+        for(let i=0;i<100;i++) gs.rbPs.push({
+          x:Math.random()*cw,y:Math.random()*ch,size:2+Math.random()*5,
+          color:cols[Math.floor(Math.random()*cols.length)],
+          speed:0.15+Math.random()*0.4,wobble:Math.random()*Math.PI*2,
+          wobbleSpd:0.008+Math.random()*0.015,opacity:0,
+          target:0.4+Math.random()*0.4,shape:Math.random()>0.5?"c":"d",
+        });
+      }
+      const po=(t-0.3)/0.7;
+      gs.rbPs.forEach(p=>{
+        p.wobble+=p.wobbleSpd;p.y-=p.speed*0.3;p.x+=Math.sin(p.wobble)*0.3;
+        if(p.y<-10)p.y=ch+10;
+        c.save();c.globalAlpha=p.target*po*0.5;c.fillStyle=p.color;
+        if(p.shape==="c"){c.beginPath();c.arc(p.x,p.y,p.size,0,Math.PI*2);c.fill();}
+        else{c.translate(p.x,p.y);c.rotate(Math.PI/4);c.fillRect(-p.size/2,-p.size/2,p.size,p.size);}
+        c.restore();
+      });
+    }
+
+    if(gs.endT>1.3){gs.phase="quote";gs.quoteStartTime=Date.now();}
+  }
+
+  // === QUOTE SCREEN ===
+  if(gs.phase==="quote"){
+    const rg=c.createLinearGradient(0,0,0,ch);
+    rg.addColorStop(0,"#141828");rg.addColorStop(0.5,"#111525");rg.addColorStop(1,"#0e1220");
+    c.fillStyle=rg;c.fillRect(0,0,cw,ch);
+
+    if(gs.rbPs)gs.rbPs.forEach(p=>{
+      p.wobble+=p.wobbleSpd;p.y-=p.speed*0.2;p.x+=Math.sin(p.wobble)*0.25;
+      if(p.opacity<p.target)p.opacity+=0.006;
+      if(p.y<-10){p.y=ch+10;p.x=Math.random()*cw;}
+      c.save();c.globalAlpha=p.opacity*0.7;c.fillStyle=p.color;
+      if(p.shape==="c"){c.beginPath();c.arc(p.x,p.y,p.size,0,Math.PI*2);c.fill();}
+      else{c.translate(p.x,p.y);c.rotate(Math.PI/4);c.fillRect(-p.size/2,-p.size/2,p.size,p.size);}
+      c.restore();
+    });
+
+    const quoteAge=(Date.now()-gs.quoteStartTime)/1000;
+    const quoteFade=quoteAge<7?1:Math.max(0,1-(quoteAge-7)/2);
+
+    if(quoteFade>0&&gs.endQuote){
+      c.save();
+      c.font="italic 600 22px 'Helvetica Neue',sans-serif";
+      const maxW=cw*0.72;
+      const words=gs.endQuote.split(" ");
+      let lines=[],cur="";
+      for(const w of words){
+        const test=cur?cur+" "+w:w;
+        if(c.measureText(test).width>maxW&&cur){lines.push(cur);cur=w;}
+        else cur=test;
+      }
+      if(cur)lines.push(cur);
+      const lh=34,padX=28,padY=18;
+      let maxLineW=0;
+      lines.forEach(l=>{const w=c.measureText(l).width;if(w>maxLineW)maxLineW=w;});
+      const pillW=maxLineW+padX*2,pillH=lines.length*lh+padY*2;
+      const pillX=(cw-pillW)/2,pillY=ch*0.25;
+      c.globalAlpha=quoteFade*0.88;
+      c.fillStyle="rgba(15,20,40,0.78)";
+      c.beginPath();c.roundRect(pillX,pillY,pillW,pillH,14);c.fill();
+      c.globalAlpha=quoteFade*0.5;
+      c.strokeStyle="rgba(160,180,230,0.3)";c.lineWidth=1;c.stroke();
+      c.globalAlpha=quoteFade;
+      c.fillStyle="rgba(220,228,248,0.95)";
+      c.textAlign="center";c.textBaseline="middle";
+      lines.forEach((l,i)=>c.fillText(l,cw/2,pillY+padY+lh*0.5+i*lh));
+      c.restore();
+    }
+
+    const btnW=160,btnH=34,btnY=ch-55;
+    const btn1X=(cw-btnW)/2;
+    c.fillStyle="rgba(25,30,55,0.85)";
+    c.beginPath();c.roundRect(btn1X,btnY,btnW,btnH,17);c.fill();
+    c.fillStyle="rgba(200,215,245,0.95)";c.font="600 13px 'Helvetica Neue',sans-serif";
+    c.textAlign="center";c.fillText("play again",btn1X+btnW/2,btnY+btnH/2+4);
+  }
+
+  requestAnimationFrame(loop);
+}
+
+
+// --- Stop audio when app goes to background / tab hidden ---
+(function setupBackgroundAudioStop(){
+
+  function stopAllAudioForBackground(){
+    try {
+      if (typeof stopRainLoop === "function") stopRainLoop();
+      if (typeof stopLoops === "function") stopLoops();
+      if (typeof stopFire === "function") stopFire();
+    } catch(e) {}
+
+    // Final guarantee: suspend the AudioContext
+    try {
+      if (typeof actx !== "undefined" && actx && actx.state === "running") {
+        actx.suspend();
+      }
+    } catch(e) {}
+  }
+
+  function resumeAudioIfNeeded(){
+    try {
+      if (typeof actx !== "undefined" && actx && actx.state === "suspended") {
+        actx.resume();
+      }
+    } catch(e) {}
+  }
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) stopAllAudioForBackground();
+    else resumeAudioIfNeeded();
+  });
+
+  window.addEventListener("pagehide", stopAllAudioForBackground);
+  window.addEventListener("blur", stopAllAudioForBackground);
+  window.addEventListener("pause", stopAllAudioForBackground);
+  window.addEventListener("resume", resumeAudioIfNeeded);
+
+})();
+scheduleGlow();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
