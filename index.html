@@ -778,6 +778,30 @@
       .poll-section { padding: 0 1.25rem 3.5rem; }
       .contact-section { padding: 0 1.25rem 3rem; }
     }
+
+    .game-btns {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .game-cta-gold {
+      color: var(--gold);
+      border-color: rgba(201,168,76,0.4);
+      flex: 1;
+      text-align: center;
+    }
+    .game-cta-gold:hover { background: rgba(201,168,76,0.08); border-color: var(--gold); }
+
+    .game-cta-blue {
+      color: var(--glow);
+      border-color: rgba(126,184,212,0.4);
+      flex: 1;
+      text-align: center;
+      font-weight: 400;
+    }
+    .game-cta-blue:hover { background: rgba(126,184,212,0.08); border-color: var(--glow); }
+
   </style>
 </head>
 <body>
@@ -845,7 +869,10 @@
             <span class="tag">Ad-free</span>
             <span class="tag">No accounts</span>
           </div>
-          <a href="https://play.google.com/store/apps/details?id=com.lunabellegames.raindrops&pcampaignid=web_share" class="game-cta" target="_blank" rel="noopener noreferrer">Google Play →</a>
+          <div class="game-btns">
+            <a href="https://play.google.com/store/apps/details?id=com.lunabellegames.raindrops&pcampaignid=web_share" class="game-cta game-cta-gold" target="_blank" rel="noopener noreferrer">Google Play →</a>
+            <a href="games.html#raindrops" class="game-cta game-cta-blue">Try the Demo →</a>
+          </div>
         </div>
       </div>
 
@@ -863,39 +890,17 @@
             <span class="tag">Ad-free</span>
             <span class="tag">No accounts</span>
           </div>
-          <a href="https://play.google.com/store/apps/details?id=com.lunabellegames.getfish" class="game-cta" target="_blank" rel="noopener noreferrer">Google Play →</a>
+          <div class="game-btns">
+            <a href="https://play.google.com/store/apps/details?id=com.lunabellegames.getfish" class="game-cta game-cta-gold" target="_blank" rel="noopener noreferrer">Google Play →</a>
+            <a href="games.html#getfish" class="game-cta game-cta-blue">Try the Demo →</a>
+          </div>
         </div>
       </div>
 
     </div>
   </div>
 
-  <!-- DEMOS -->
-  <div class="demos-section">
 
-    <div class="demo-block">
-      <div class="demo-header">
-        <p class="demo-title">Try Raindrops</p>
-        <p class="demo-note">A taste of the mountain scene — catch the glowing drops.</p>
-      </div>
-      <div class="demo-frame">
-        <iframe src="mountain.html" title="Raindrops — Mountain Scene Preview" allowfullscreen allow="autoplay"></iframe>
-      </div>
-      <p class="demo-foot">Best with sound on · Full version on Android</p>
-    </div>
-
-    <div class="demo-block">
-      <div class="demo-header">
-        <p class="demo-title">Try Get Fish!</p>
-        <p class="demo-note">Catch 10 fish — toggle the rain and feed them if you like.</p>
-      </div>
-      <div class="demo-frame">
-        <iframe src="games/get-fish/demo.html" title="Get Fish! Preview" allowfullscreen allow="autoplay"></iframe>
-      </div>
-      <p class="demo-foot">Best with sound on · Full version on Android</p>
-    </div>
-
-  </div>
 
   <!-- BAD BUBBLE TEASER -->
   <div class="teaser-section">
@@ -1014,32 +1019,7 @@
     btnNo.addEventListener('click',  () => { if (hasVoted()) return; markVoted('no'); renderPoll(); });
     renderPoll();
 
-    // Kill iframe audio when scrolled out of view or page hidden
-    const iframes = document.querySelectorAll('iframe');
 
-    function stopIframe(iframe) {
-      const src = iframe.src;
-      iframe.src = '';
-      setTimeout(() => { iframe.src = src; }, 50);
-    }
-
-    // Pause when tab is hidden
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) {
-        iframes.forEach(stopIframe);
-      }
-    });
-
-    // Pause when scrolled out of view
-    const iframeObserver = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (!entry.isIntersecting) {
-          stopIframe(entry.target);
-        }
-      });
-    }, { threshold: 0.05 });
-
-    iframes.forEach(iframe => iframeObserver.observe(iframe));
   </script>
 
 </body>
