@@ -482,7 +482,7 @@
     .more-section {
       position: relative;
       z-index: 1;
-      max-width: 640px;
+      max-width: 680px;
       margin: 0 auto;
       padding: 0 2rem 5rem;
       text-align: center;
@@ -497,20 +497,27 @@
       margin: 0 auto 2rem;
     }
 
+    .more-paw {
+      font-size: 1.4rem;
+      margin-bottom: 0.6rem;
+      display: block;
+    }
+
     .more-label {
-      font-size: 0.6rem;
-      letter-spacing: 0.3em;
-      text-transform: uppercase;
-      color: var(--glow);
-      margin-bottom: 0.75rem;
+      font-family: 'Cinzel', serif;
+      font-size: clamp(1rem, 3vw, 1.4rem);
+      letter-spacing: 0.1em;
+      color: var(--pale);
+      margin-bottom: 1rem;
+      font-weight: 400;
     }
 
     .more-text {
-      font-size: 0.88rem;
+      font-size: clamp(0.88rem, 2vw, 1rem);
       color: var(--pale);
-      line-height: 1.8;
-      margin-bottom: 1.2rem;
-      font-style: italic;
+      line-height: 1.9;
+      margin-bottom: 1.5rem;
+      font-weight: 400;
     }
 
     .more-links {
@@ -521,11 +528,11 @@
     }
 
     .more-link {
-      font-size: 0.65rem;
+      font-size: 0.7rem;
       letter-spacing: 0.2em;
       text-transform: uppercase;
       text-decoration: none;
-      padding: 0.5rem 1.2rem;
+      padding: 0.6rem 1.4rem;
       border-radius: 3px;
       border: 1px solid;
       transition: background 0.2s;
@@ -533,21 +540,21 @@
 
     .more-link-comics {
       color: var(--gold);
-      border-color: rgba(201,168,76,0.3);
+      border-color: rgba(201,168,76,0.4);
     }
-    .more-link-comics:hover { background: rgba(201,168,76,0.08); }
+    .more-link-comics:hover { background: rgba(201,168,76,0.1); }
 
     .more-link-stories {
       color: #c8c0d8;
-      border-color: rgba(200,192,216,0.25);
+      border-color: rgba(200,192,216,0.35);
     }
-    .more-link-stories:hover { background: rgba(200,192,216,0.06); }
+    .more-link-stories:hover { background: rgba(200,192,216,0.08); }
 
     .more-link-about {
       color: var(--teal);
-      border-color: rgba(78,201,184,0.25);
+      border-color: rgba(78,201,184,0.35);
     }
-    .more-link-about:hover { background: rgba(78,201,184,0.06); }
+    .more-link-about:hover { background: rgba(78,201,184,0.08); }
 
     /* === DISCORD POLL === */
     .poll-section {
@@ -624,11 +631,11 @@
 
     .poll-btn-no {
       color: var(--text);
-      border-color: rgba(222,237,245,0.2);
+      border-color: var(--text);
     }
     .poll-btn-no:hover, .poll-btn-no.voted {
       background: rgba(222,237,245,0.05);
-      border-color: rgba(222,237,245,0.4);
+      border-color: var(--pale);
     }
 
     .poll-count {
@@ -908,8 +915,9 @@
   <!-- MORE FROM LUNABELLE -->
   <div class="more-section">
     <div class="more-divider"></div>
-    <p class="more-label">While you're here</p>
-    <p class="more-text">"We also make comics, tell weird stories, and occasionally share what's going on behind the scenes."</p>
+    <span class="more-paw">🐾</span>
+    <p class="more-label">There's more, if you're curious</p>
+    <p class="more-text">We also make one-panel comics and maybe even a haiku here and there, tell weird stories born from an overactive brain with a bizarre imagination, and yes, there's an about page if you want to know who's behind all of this. Go ahead — click on things. We don't bite.</p>
     <div class="more-links">
       <a href="comics.html" class="more-link more-link-comics">Comics</a>
       <a href="stories.html" class="more-link more-link-stories">Stories</a>
@@ -925,7 +933,7 @@
     <p class="poll-sub">Hit 50 yes votes and I'll make it happen. Come back and check the count!</p>
     <div class="poll-buttons">
       <button class="poll-btn poll-btn-yes" id="btnYes">Yes, do it</button>
-      <button class="poll-btn poll-btn-no" id="btnNo">Not yet</button>
+      <button class="poll-btn poll-btn-no" id="btnNo">Nope</button>
     </div>
     <p class="poll-count" id="pollCount">Loading votes...</p>
     <p class="poll-milestone" id="pollMilestone">We hit 50! A Discord server is on its way — stay tuned.</p>
@@ -998,7 +1006,7 @@
         btnYes.classList.toggle('voted', choice === 'yes');
         btnNo.classList.toggle('voted',  choice === 'no');
         btnYes.textContent = choice === 'yes' ? 'You voted yes ✓' : 'Yes, do it';
-        btnNo.textContent  = choice === 'no'  ? 'You voted no ✓'  : 'Not yet';
+        btnNo.textContent  = choice === 'no'  ? 'You voted nope ✓'  : 'Nope';
       }
     }
 
