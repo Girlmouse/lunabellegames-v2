@@ -108,9 +108,11 @@
       flex-direction: column;
       gap: 5px;
       cursor: pointer;
-      padding: 4px;
+      padding: 8px;
       background: none;
       border: none;
+      position: relative;
+      z-index: 101;
     }
 
     .nav-toggle span {
@@ -870,21 +872,6 @@
     const navToggle = document.getElementById('navToggle');
     const navMobile = document.getElementById('navMobile');
     navToggle.addEventListener('click', () => navMobile.classList.toggle('open'));
-    navMobile.querySelectorAll('a').forEach(a => a.addEventListener('click', () => navMobile.classList.remove('open')));
-      try {
-        const formData = new FormData();
-        formData.append(ENTRY_ID, answer);
-        await fetch(FORM_ACTION, {
-          method: 'POST',
-          body: formData,
-          mode: 'no-cors'
-        });
-      } catch(e) {}
-    }
-
-    btnYes.addEventListener('click', () => submitVote('Yes, do it!'));
-    btnNo.addEventListener('click',  () => submitVote('Nope'));
-    renderPoll();
 
 
   </script>
