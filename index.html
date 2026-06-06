@@ -987,36 +987,73 @@
     navToggle.addEventListener('click', () => navMobile.classList.toggle('open'));
     navMobile.querySelectorAll('a').forEach(a => a.addEventListener('click', () => navMobile.classList.remove('open')));
 
-    // Discord poll
+    // Discord poll — Google Sheets backend
     const GOAL = 50;
+    const FORM_ACTION = 'https://docs.google.com/forms/d/e/1FAIpQLSeMcBVupbF3L0deNdp1g-6p-a6ElewTx5imQFjbkj4fYgjDzQ/formResponse';
+    const ENTRY_ID = 'entry.2080059998';
+    const SHEET_ID = '1Oe2rE-P1PQAhQlTHXQfwV3wTCBqF8-ZglbTN9C0fQpQ';
+
     const btnYes    = document.getElementById('btnYes');
     const btnNo     = document.getElementById('btnNo');
     const pollCount = document.getElementById('pollCount');
     const milestone = document.getElementById('pollMilestone');
 
-    function getVotes() { return parseInt(localStorage.getItem('lb_discord_yes') || '0'); }
-    function setVotes(n) { localStorage.setItem('lb_discord_yes', n); }
     function hasVoted() { return !!localStorage.getItem('lb_discord_voted'); }
     function markVoted(choice) { localStorage.setItem('lb_discord_voted', choice); }
 
-    function renderPoll() {
-      const votes = getVotes();
+    async function fetchVotes() {
+      try {
+        const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=Form_Responses`;
+        const res = await fetch(url);
+        const text = await res.text();
+        const json = JSON.parse(text.substring(47).slice(0, -2));
+        const rows = json.table.rows || [];
+        const yesVotes = rows.filter(r => r.c && r.c[1] && r.c[1].v && r.c[1].v.toLowerCase().includes('yes')).length;
+        return yesVotes;
+      } catch(e) {
+        return null;
+      }
+    }
+
+    async function renderPoll() {
+      const votes = await fetchVotes();
       const voted = hasVoted();
       const choice = localStorage.getItem('lb_discord_voted');
-      pollCount.innerHTML = `<span>${votes}</span> yes vote${votes !== 1 ? 's' : ''} so far — goal: ${GOAL}`;
-      if (votes >= GOAL) milestone.style.display = 'block';
+
+      if (votes !== null) {
+        pollCount.innerHTML = `<span>${votes}</span> yes vote${votes !== 1 ? 's' : ''} so far — goal: ${GOAL}`;
+        if (votes >= GOAL) milestone.style.display = 'block';
+      } else {
+        pollCount.textContent = 'Loading votes...';
+      }
+
       if (voted) {
         btnYes.disabled = true;
         btnNo.disabled  = true;
         btnYes.classList.toggle('voted', choice === 'yes');
         btnNo.classList.toggle('voted',  choice === 'no');
         btnYes.textContent = choice === 'yes' ? 'You voted yes ✓' : 'Yes, do it';
-        btnNo.textContent  = choice === 'no'  ? 'You voted nope ✓'  : 'Nope';
+        btnNo.textContent  = choice === 'no'  ? 'You voted nope ✓' : 'Nope';
       }
     }
 
-    btnYes.addEventListener('click', () => { if (hasVoted()) return; setVotes(getVotes() + 1); markVoted('yes'); renderPoll(); });
-    btnNo.addEventListener('click',  () => { if (hasVoted()) return; markVoted('no'); renderPoll(); });
+    async function submitVote(answer) {
+      if (hasVoted()) return;
+      markVoted(answer === 'Yes, do it!' ? 'yes' : 'no');
+      renderPoll();
+      try {
+        const formData = new FormData();
+        formData.append(ENTRY_ID, answer);
+        await fetch(FORM_ACTION, {
+          method: 'POST',
+          body: formData,
+          mode: 'no-cors'
+        });
+      } catch(e) {}
+    }
+
+    btnYes.addEventListener('click', () => submitVote('Yes, do it!'));
+    btnNo.addEventListener('click',  () => submitVote('Nope'));
     renderPoll();
 
 
