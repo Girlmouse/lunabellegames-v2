@@ -556,107 +556,6 @@
     }
     .more-link-about:hover { background: rgba(78,201,184,0.08); }
 
-    /* === DISCORD POLL === */
-    .poll-section {
-      position: relative;
-      z-index: 1;
-      padding: 0 1.5rem 5rem;
-      max-width: 560px;
-      margin: 0 auto;
-      text-align: center;
-      opacity: 0;
-      animation: fadeUp 0.9s ease 1.2s forwards;
-    }
-
-    .poll-divider {
-      width: 40px;
-      height: 1px;
-      background: rgba(126,184,212,0.2);
-      margin: 0 auto 2rem;
-    }
-
-    .poll-label {
-      font-size: 0.6rem;
-      letter-spacing: 0.3em;
-      text-transform: uppercase;
-      color: var(--glow);
-      margin-bottom: 0.75rem;
-    }
-
-    .poll-question {
-      font-family: 'Cinzel', serif;
-      font-size: clamp(0.85rem, 2.5vw, 1rem);
-      font-weight: 400;
-      color: var(--pale);
-      letter-spacing: 0.05em;
-      line-height: 1.6;
-      margin-bottom: 0.5rem;
-    }
-
-    .poll-sub {
-      font-size: 0.78rem;
-      color: var(--text);
-      letter-spacing: 0.05em;
-      margin-bottom: 1.5rem;
-      line-height: 1.6;
-    }
-
-    .poll-buttons {
-      display: flex;
-      gap: 10px;
-      justify-content: center;
-      margin-bottom: 1.2rem;
-    }
-
-    .poll-btn {
-      font-family: 'Cinzel', serif;
-      font-size: 0.75rem;
-      letter-spacing: 0.15em;
-      padding: 0.6rem 1.6rem;
-      border-radius: 3px;
-      border: 1px solid;
-      cursor: pointer;
-      transition: all 0.2s;
-      background: transparent;
-    }
-
-    .poll-btn-yes {
-      color: var(--glow);
-      border-color: rgba(126,184,212,0.4);
-    }
-    .poll-btn-yes:hover, .poll-btn-yes.voted {
-      background: rgba(126,184,212,0.1);
-      border-color: var(--glow);
-    }
-
-    .poll-btn-no {
-      color: var(--text);
-      border-color: var(--text);
-    }
-    .poll-btn-no:hover, .poll-btn-no.voted {
-      background: rgba(222,237,245,0.05);
-      border-color: var(--pale);
-    }
-
-    .poll-count {
-      font-size: 0.72rem;
-      color: var(--text);
-      letter-spacing: 0.1em;
-      min-height: 1.2rem;
-    }
-
-    .poll-count span { color: var(--glow); }
-
-    .poll-milestone {
-      display: none;
-      margin-top: 0.75rem;
-      font-family: 'Cinzel', serif;
-      font-size: 0.8rem;
-      color: var(--gold);
-      letter-spacing: 0.1em;
-      line-height: 1.6;
-    }
-
     /* === CONTACT === */
     .contact-section {
       position: relative;
@@ -930,10 +829,7 @@
     </div>
   </div>
 
-  <!-- DISCORD POLL -->
-  <div class="poll-section">
-    <div class="poll-divider"></div>
-    <p class="poll-label">Community</p>
+<p class="poll-label">Community</p>
     <p class="poll-question">Should I start a LunaBelle Discord server?</p>
     <p class="poll-sub">Hit 50 yes votes and I'll make it happen. Come back and check the count!</p>
     <div class="poll-buttons">
@@ -986,61 +882,6 @@
     const navMobile = document.getElementById('navMobile');
     navToggle.addEventListener('click', () => navMobile.classList.toggle('open'));
     navMobile.querySelectorAll('a').forEach(a => a.addEventListener('click', () => navMobile.classList.remove('open')));
-
-    // Discord poll — Google Sheets backend
-    const GOAL = 50;
-    const FORM_ACTION = 'https://docs.google.com/forms/d/e/1FAIpQLSeMcBVupbF3L0deNdp1g-6p-a6ElewTx5imQFjbkj4fYgjDzQ/formResponse';
-    const ENTRY_ID = 'entry.2080059998';
-    const SHEET_ID = '1Oe2rE-P1PQAhQlTHXQfwV3wTCBqF8-ZglbTN9C0fQpQ';
-
-    const btnYes    = document.getElementById('btnYes');
-    const btnNo     = document.getElementById('btnNo');
-    const pollCount = document.getElementById('pollCount');
-    const milestone = document.getElementById('pollMilestone');
-
-    function hasVoted() { return !!localStorage.getItem('lb_discord_voted'); }
-    function markVoted(choice) { localStorage.setItem('lb_discord_voted', choice); }
-
-    async function fetchVotes() {
-      try {
-        const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=Form_Responses`;
-        const res = await fetch(url);
-        const text = await res.text();
-        const json = JSON.parse(text.substring(47).slice(0, -2));
-        const rows = json.table.rows || [];
-        const yesVotes = rows.filter(r => r.c && r.c[1] && r.c[1].v && r.c[1].v.toLowerCase().includes('yes')).length;
-        return yesVotes;
-      } catch(e) {
-        return null;
-      }
-    }
-
-    async function renderPoll() {
-      const votes = await fetchVotes();
-      const voted = hasVoted();
-      const choice = localStorage.getItem('lb_discord_voted');
-
-      if (votes !== null) {
-        pollCount.innerHTML = `<span>${votes}</span> yes vote${votes !== 1 ? 's' : ''} so far — goal: ${GOAL}`;
-        if (votes >= GOAL) milestone.style.display = 'block';
-      } else {
-        pollCount.textContent = 'Loading votes...';
-      }
-
-      if (voted) {
-        btnYes.disabled = true;
-        btnNo.disabled  = true;
-        btnYes.classList.toggle('voted', choice === 'yes');
-        btnNo.classList.toggle('voted',  choice === 'no');
-        btnYes.textContent = choice === 'yes' ? 'You voted yes ✓' : 'Yes, do it';
-        btnNo.textContent  = choice === 'no'  ? 'You voted nope ✓' : 'Nope';
-      }
-    }
-
-    async function submitVote(answer) {
-      if (hasVoted()) return;
-      markVoted(answer === 'Yes, do it!' ? 'yes' : 'no');
-      renderPoll();
       try {
         const formData = new FormData();
         formData.append(ENTRY_ID, answer);
