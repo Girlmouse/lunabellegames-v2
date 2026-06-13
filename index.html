@@ -482,84 +482,6 @@
       flex-shrink: 0;
     }
 
-    /* === MORE FROM === */
-    .more-section {
-      position: relative;
-      z-index: 1;
-      max-width: 680px;
-      margin: 0 auto;
-      padding: 0 2rem 5rem;
-      text-align: center;
-      opacity: 0;
-      animation: fadeUp 0.9s ease 1.15s forwards;
-    }
-
-    .more-divider {
-      width: 40px;
-      height: 1px;
-      background: rgba(126,184,212,0.2);
-      margin: 0 auto 2rem;
-    }
-
-    .more-paw {
-      font-size: 1.4rem;
-      margin-bottom: 0.6rem;
-      display: block;
-    }
-
-    .more-label {
-      font-family: 'Cinzel', serif;
-      font-size: clamp(1rem, 3vw, 1.4rem);
-      letter-spacing: 0.1em;
-      color: var(--gold);
-      margin-bottom: 1rem;
-      font-weight: 400;
-    }
-
-    .more-text {
-      font-size: clamp(0.88rem, 2vw, 1rem);
-      color: var(--pale);
-      line-height: 1.9;
-      margin-bottom: 1.5rem;
-      font-weight: 400;
-    }
-
-    .more-links {
-      display: flex;
-      justify-content: center;
-      gap: 1.5rem;
-      flex-wrap: wrap;
-    }
-
-    .more-link {
-      font-size: 0.7rem;
-      letter-spacing: 0.2em;
-      text-transform: uppercase;
-      text-decoration: none;
-      padding: 0.6rem 1.4rem;
-      border-radius: 3px;
-      border: 1px solid;
-      transition: background 0.2s;
-    }
-
-    .more-link-comics {
-      color: var(--gold);
-      border-color: rgba(201,168,76,0.4);
-    }
-    .more-link-comics:hover { background: rgba(201,168,76,0.1); }
-
-    .more-link-stories {
-      color: #c8c0d8;
-      border-color: rgba(200,192,216,0.35);
-    }
-    .more-link-stories:hover { background: rgba(200,192,216,0.08); }
-
-    .more-link-about {
-      color: var(--teal);
-      border-color: rgba(78,201,184,0.35);
-    }
-    .more-link-about:hover { background: rgba(78,201,184,0.08); }
-
     /* === CONTACT === */
     .contact-section {
       position: relative;
@@ -675,10 +597,6 @@
       .teaser-section { padding: 0 1.25rem 3rem; }
       .teaser-card { flex-direction: column; align-items: flex-start; }
 
-      .more-section { padding: 0 1.25rem 4rem; }
-      .more-links { gap: 0.75rem; }
-
-      
       .contact-section { padding: 0 1.25rem 3rem; }
     }
 
@@ -706,101 +624,6 @@
     .game-cta-blue:hover { background: rgba(126,184,212,0.08); border-color: var(--glow); }
 
 
-    .more-cards {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 14px;
-      margin-bottom: 1rem;
-      width: 100%;
-    }
-
-    .more-card {
-      border-radius: 10px;
-      overflow: hidden;
-      text-decoration: none;
-      border: 1px solid;
-      transition: transform 0.25s ease, box-shadow 0.25s ease;
-      display: block;
-    }
-
-    .more-card:hover { transform: translateY(-3px); }
-
-    .more-card-img {
-      width: 100%;
-      aspect-ratio: 5/4;
-      overflow: hidden;
-      background: var(--deep);
-    }
-
-    .more-card-img img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
-      transition: transform 0.3s ease;
-    }
-
-    .more-card-img-stories img {
-      object-fit: contain;
-      padding: 1rem;
-      background: #0d0d0d;
-    }
-
-    .more-card:hover .more-card-img img { transform: scale(1.03); }
-
-    .more-card-body {
-      padding: 1rem;
-    }
-
-    .more-card-title {
-      font-family: 'Cinzel', serif;
-      font-size: 1rem;
-      letter-spacing: 0.08em;
-      margin-bottom: 0.4rem;
-    }
-
-    .more-card-desc {
-      font-size: 0.78rem;
-      font-family: sans-serif;
-      line-height: 1.5;
-      margin-bottom: 0.75rem;
-    }
-
-    .more-card-cta {
-      font-size: 0.62rem;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      font-family: sans-serif;
-    }
-
-    .more-card-comics {
-      background: rgba(201,168,76,0.06);
-      border-color: rgba(201,168,76,0.22);
-    }
-    .more-card-comics .more-card-title { color: var(--gold); }
-    .more-card-comics .more-card-desc  { color: var(--text); }
-    .more-card-comics .more-card-cta   { color: var(--gold); }
-    .more-card-comics:hover { box-shadow: 0 8px 30px rgba(201,168,76,0.08); }
-
-    .more-card-stories {
-      background: rgba(15,16,24,0.7);
-      border-color: rgba(255,255,255,0.07);
-    }
-    .more-card-stories .more-card-title { color: #c8c0d8; }
-    .more-card-stories .more-card-desc  { color: var(--text); }
-    .more-card-stories .more-card-cta   { color: #c8c0d8; }
-    .more-card-stories:hover { box-shadow: 0 8px 30px rgba(0,0,0,0.3); }
-
-
-    .more-card-about {
-      background: rgba(78,201,184,0.06);
-      border-color: rgba(78,201,184,0.18);
-    }
-    .more-card-about .more-card-title { color: var(--teal); }
-    .more-card-about .more-card-desc  { color: var(--text); }
-    .more-card-about .more-card-cta   { color: var(--teal); }
-    .more-card-about:hover { box-shadow: 0 8px 30px rgba(78,201,184,0.08); }
-    .more-card-about .more-card-img img { object-fit: contain; mix-blend-mode: screen; }
   </style>
 </head>
 <body>
@@ -813,8 +636,6 @@
     </a>
     <ul class="nav-links">
       <li><a href="games.html">Games</a></li>
-      <li><a href="stories.html">Stories</a></li>
-      <li><a href="comics.html">Comics</a></li>
       <li><a href="about.html">About</a></li>
     </ul>
     <button class="nav-toggle" id="navToggle" aria-label="Menu">
@@ -825,8 +646,6 @@
   <!-- MOBILE NAV -->
   <div class="nav-mobile" id="navMobile">
     <a href="games.html">Games</a>
-    <a href="stories.html">Stories</a>
-    <a href="comics.html">Comics</a>
     <a href="about.html">About</a>
   </div>
 
@@ -913,46 +732,6 @@
         <span class="badge-dot"></span>
         In development
       </div>
-    </div>
-  </div>
-
-  <!-- MORE FROM LUNABELLE -->
-  <div class="more-section">
-    <div class="more-divider"></div>
-    <span class="more-paw">🐾</span>
-    <p class="more-label">There's more, if you're curious</p>
-    <p class="more-text">The creative pursuits did not stop at video games. You can find some one-panel comics and weird short stories, compliments of a bizarre imagination. An about page made sense, so there's that. Click around and have some fun.</p>
-    <div class="more-cards">
-      <a href="comics.html" class="more-card more-card-comics">
-        <div class="more-card-img">
-          <img src="comics/comic-13.png" alt="Comics preview">
-        </div>
-        <div class="more-card-body">
-          <p class="more-card-title">Comics</p>
-          <p class="more-card-desc">One panel comics made with Canva and inspired by everyday life</p>
-          <span class="more-card-cta">browse →</span>
-        </div>
-      </a>
-      <a href="stories.html" class="more-card more-card-stories">
-        <div class="more-card-img more-card-img-stories">
-          <img src="images/stories-preview.png" alt="Stories preview">
-        </div>
-        <div class="more-card-body">
-          <p class="more-card-title">Stories</p>
-          <p class="more-card-desc">Weird short stories inspired by the Twilight Zone</p>
-          <span class="more-card-cta">read →</span>
-        </div>
-      </a>
-      <a href="about.html" class="more-card more-card-about">
-        <div class="more-card-img">
-          <img src="images/luna-cute.png" alt="About LunaBelle">
-        </div>
-        <div class="more-card-body">
-          <p class="more-card-title">About</p>
-          <p class="more-card-desc">Who's behind LunaBelle?</p>
-          <span class="more-card-cta">come say hi →</span>
-        </div>
-      </a>
     </div>
   </div>
 
